@@ -229,7 +229,9 @@ function App() {
       settings=${db.settings}
       setSettings=${setSettings}
       onGrade=${grade(rep.id, view.mode)}
-      onExit=${() => (view.mode === 'practice' ? go('compare') : back())}
+      onExit=${() => (view.mode === 'practice' && !view.redo ? go('compare') : back())}
+      redo=${view.redo}
+      onPractice=${keys => setView({ ...view, mode: 'practice', focusKey: keys, chapter: null, redo: true, nonce: Date.now() })}
       onMore=${() => train(rep.id, view.mode, view.chapter, null, view.backTo)}
       onDone=${() => view.mode !== 'practice' && update(cur => ({ settings: { ...cur.settings, lessons: (cur.settings.lessons || 0) + 1 } }))}
     />`;
@@ -247,6 +249,7 @@ function App() {
     />`;
   } else if (view.name === 'rep' && rep) {
     body = html`<${RepertoireView}
+      setSettings=${setSettings}
       db=${db}
       rep=${rep}
       train=${train}

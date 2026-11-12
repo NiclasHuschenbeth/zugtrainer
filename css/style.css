@@ -63,6 +63,7 @@ main { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px; flex:
 .dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
 .dot.error, .dot.offline { background: var(--bad); }
 @keyframes pulse { 50% { opacity: .3; } }
+.captcha { min-height: 65px; }
 .modal-box.account { width: min(480px, 100%); }
 .foot-links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: .4rem; }
 .foot { padding: 1rem 16px; text-align: center; color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); }

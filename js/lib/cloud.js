@@ -82,6 +82,14 @@ export async function verifyCode(email, token) {
   if (error) throw error;
 }
 
+/** Löscht das Konto samt aller Daten auf dem Server (die Daten auf diesem Gerät bleiben). */
+export async function deleteAccount() {
+  const c = await getClient();
+  const { error } = await c.rpc('delete_my_account');
+  if (error) throw error;
+  await c.auth.signOut({ scope: 'local' }).catch(() => {});
+}
+
 export async function signOut() {
   const c = await getClient();
   await c.auth.signOut();

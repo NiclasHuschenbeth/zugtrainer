@@ -36,7 +36,7 @@ export async function loadAll() {
     ['repertoires', 'progress', 'games', 'accounts', 'activity', 'settings', 'sync'].map(k => kvGet(k).catch(() => undefined)),
   );
   return {
-    settings: { teach: true, sound: true, compare: {}, explorer: 'all', engine: false, cloud: true, coverMin: 0.02, lichessToken: null, ...(settings || {}) },
+    settings: { teach: true, sound: true, compare: {}, explorer: 'all', engine: false, cloud: false, coverMin: 0.02, lichessToken: null, ...(settings || {}) },
     activity: activity || { goal: 20, days: {} },
     repertoires: repertoires || [],
     progress: progress || {},

@@ -1,4 +1,4 @@
-# Zugtrainer
+# Modern Chess Trainer
 
 Eröffnungsrepertoires lernen, wiederholen und mit den eigenen Online-Partien abgleichen.
 

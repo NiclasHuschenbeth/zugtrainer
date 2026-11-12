@@ -1,13 +1,15 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = 'b3b071c37c';
+const VERSION = 'ae24ac4a6f';
 const FILES = [
   "./",
   "css/style.css",
   "icons/icon-180.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
-  "icons/icon.svg",
+  "icons/logo-icon.png",
+  "icons/logo-wordmark-trainer.png",
+  "icons/logo-wordmark.png",
   "index.html",
   "js/app.js",
   "js/config.js",
@@ -30,6 +32,8 @@ const FILES = [
   "js/ui/compare.js",
   "js/ui/editor.js",
   "js/ui/games.js",
+  "js/ui/menu.js",
+  "js/ui/onboarding.js",
   "js/ui/repertoires.js",
   "js/ui/scrim.js",
   "js/ui/trainer.js",
@@ -52,6 +56,8 @@ const FILES = [
   "vendor/chessops/types.js",
   "vendor/chessops/util.js",
   "vendor/chessops/variant.js",
+  "vendor/fonts/raleway/raleway-latin-ext.woff2",
+  "vendor/fonts/raleway/raleway-latin.woff2",
   "vendor/preact/standalone.module.js",
   "vendor/stockfish/stockfish-19-lite-single.js",
   "vendor/stockfish/stockfish-19-lite-single.wasm",

@@ -9,5 +9,5 @@ export const CONFIG = {
   supabaseUrl: 'https://tzfxrvrbskpqamsxktdi.supabase.co',
   supabaseKey: 'sb_publishable_01N0Ik92H-UZEnKU7C9OhA_5QpDk2Hw',
   // Auf true setzen, sobald die Anmelde-Mail einen Code enthält (eigener Mailversand + angepasste Vorlage)
-  emailCode: false,
+  emailCode: true,
 };

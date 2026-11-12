@@ -12,7 +12,11 @@ Eröffnungsrepertoires lernen, wiederholen und mit den eigenen Online-Partien ab
 - **Testpartie:** Repertoire gegen Gegnerzüge nach echter Häufigkeit (Lichess) oder gegen Stockfish spielen; die Engine bewertet am Ende.
 - **Offline:** Nach dem ersten Laden funktioniert alles ohne Internet, was keine fremden Dienste braucht. Als App installierbar (PWA).
 
-Alle Daten (Repertoires, Fortschritt, Partien) liegen nur im Browser des Nutzers (IndexedDB). Es gibt keinen Server.
+Alle Daten (Repertoires, Fortschritt, Partien) liegen zunächst nur im Browser des Nutzers (IndexedDB). Mit einem kostenlosen
+Konto (Anmeldung per E-Mail-Link, [Supabase](https://supabase.com)) werden Repertoires, Lernfortschritt, Tagesziel und Einstellungen
+zwischen Geräten abgeglichen. Importierte Partien und das Lichess-Token bleiben immer lokal. Der Abgleich ist offline-first:
+alles funktioniert ohne Internet und gleicht sich danach nach festen Regeln pro Eintrag ab (siehe `js/lib/sync.js`).
+Die Tabellen und Zugriffsregeln stehen in `tools/supabase-schema.sql`; geprüft wird der Abgleich mit `tools/sync-test.mjs`.
 Die Lichess-Eröffnungsdatenbank verlangt eine Lichess-Anmeldung des Nutzers (OAuth, ohne Rechte auf dem Konto).
 
 ## Lokal starten
@@ -43,7 +47,7 @@ Den ganzen Ordner bei einem Anbieter für statische Seiten hochladen (Cloudflare
 
 ## Aufbau
 
-- `js/lib/` – Logik: `repertoire.js` (PGN → Baum/Linien), `srs.js` (Wiederholungsplan), `games.js` (Import), `analysis.js` (Abgleich),
+- `js/lib/` – Logik (u. a. `sync.js` Abgleich, `cloud.js` Supabase-Anbindung): `repertoire.js` (PGN → Baum/Linien), `srs.js` (Wiederholungsplan), `games.js` (Import), `analysis.js` (Abgleich),
   `coverage.js` (Abdeckung), `engine.js` (Stockfish), `chessdb.js`, `lichess.js` (Anmeldung, Datenbank), `storage.js`
 - `js/ui/` – Oberfläche: `trainer.js`, `editor.js`, `scrim.js` (Testpartie), `repertoires.js`, `games.js`, `compare.js`, `board.js`
 - `vendor/` – eingebundene Bibliotheken mit ihren Lizenzen

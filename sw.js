@@ -1,6 +1,6 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = 'ec32dd83a4';
+const VERSION = '02c4d67df6';
 const FILES = [
   "./",
   "css/style.css",
@@ -13,6 +13,7 @@ const FILES = [
   "js/config.js",
   "js/lib/analysis.js",
   "js/lib/chessdb.js",
+  "js/lib/cloud.js",
   "js/lib/coverage.js",
   "js/lib/engine.js",
   "js/lib/games.js",
@@ -23,6 +24,8 @@ const FILES = [
   "js/lib/sound.js",
   "js/lib/srs.js",
   "js/lib/storage.js",
+  "js/lib/sync.js",
+  "js/ui/account.js",
   "js/ui/board.js",
   "js/ui/compare.js",
   "js/ui/editor.js",
@@ -51,7 +54,8 @@ const FILES = [
   "vendor/chessops/variant.js",
   "vendor/preact/standalone.module.js",
   "vendor/stockfish/stockfish-19-lite-single.js",
-  "vendor/stockfish/stockfish-19-lite-single.wasm"
+  "vendor/stockfish/stockfish-19-lite-single.wasm",
+  "vendor/supabase/supabase.js"
 ];
 const CACHE = `zugtrainer-${VERSION}`;
 

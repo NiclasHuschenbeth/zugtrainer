@@ -263,9 +263,9 @@ function App() {
       status=${syncStatus}
       lastSync=${db.sync.last}
       onClose=${() => setShowAccount(false)}
-      onSend=${async email => {
+      onSend=${async (email, captchaToken) => {
         await watchAuth();
-        await sendLoginLink(email);
+        await sendLoginLink(email, captchaToken);
       }}
       onVerify=${async (email, code) => {
         await watchAuth();

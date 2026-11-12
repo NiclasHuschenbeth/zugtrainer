@@ -10,4 +10,7 @@ export const CONFIG = {
   supabaseKey: 'sb_publishable_01N0Ik92H-UZEnKU7C9OhA_5QpDk2Hw',
   // Auf true setzen, sobald die Anmelde-Mail einen Code enthält (eigener Mailversand + angepasste Vorlage)
   emailCode: true,
+  // Bot-Schutz (Cloudflare Turnstile) vor dem Versand von Anmelde-Mails. Der Site-Key ist öffentlich.
+  // Leer lassen, solange der Schutz in Supabase nicht aktiviert ist.
+  turnstileSiteKey: '0x4AAAAAAF-cSftCT9xIHApm',
 };

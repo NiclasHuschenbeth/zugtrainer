@@ -253,7 +253,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const d = derived(rep);
-  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0 }), []);
+  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, alts: !!settings.alts }), []);
   const [, force] = useReducer(x => x + 1, 0);
   const eng = useRef(null);
   const gradeRef = useRef(onGrade);

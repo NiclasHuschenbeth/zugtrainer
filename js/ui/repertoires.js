@@ -1,5 +1,5 @@
 import { html, useState } from 'preact';
-import { parseRepertoirePgn } from '../lib/repertoire.js';
+import { derived, parseRepertoirePgn } from '../lib/repertoire.js';
 import { dayKey, freshCount, lastDays, repStats, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
@@ -28,11 +28,11 @@ function Home({ db, setGoal, train }) {
   const week = lastDays(a);
   const max = Math.max(a.goal, ...week.map(d => d.n), 1);
   const done = today >= a.goal;
-  const stats = db.repertoires.map(rep => ({ rep, s: repStats(rep, db.progress[rep.id] || {}) }));
+  const stats = db.repertoires.map(rep => ({ rep, s: repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts) }));
   const due = stats.reduce((n, x) => n + x.s.due, 0);
   const dueReps = stats.filter(x => x.s.due);
   const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
-  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0) > 0);
+  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts) > 0);
 
   return html`<div class="home-top">
     <div class="card hero">
@@ -94,7 +94,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
     list.length > 0 &&
     html`<section class="stack">
       <h2 class="section">${title}</h2>
-      <div class="rep-grid">${list.map(rep => html`<${RepTile} key=${rep.id} rep=${rep} progress=${db.progress[rep.id] || {}} open=${() => open(rep.id)} />`)}</div>
+      <div class="rep-grid">${list.map(rep => html`<${RepTile} key=${rep.id} rep=${rep} progress=${db.progress[rep.id] || {}} open=${() => open(rep.id)} alts=${!!db.settings.alts} />`)}</div>
     </section>`;
 
   return html`<div class="stack">
@@ -107,8 +107,8 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
   </div>`;
 }
 
-function RepTile({ rep, progress, open }) {
-  const s = repStats(rep, progress);
+function RepTile({ rep, progress, open, alts }) {
+  const s = repStats(rep, progress, alts);
   const pct = pctOf(s.learned, s.total);
   return html`<button class="card tile" onClick=${open}>
     <div class="row between">
@@ -123,9 +123,11 @@ function RepTile({ rep, progress, open }) {
 
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
 export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compare, remove, back }) {
-  const s = repStats(rep, db.progress[rep.id] || {});
+  const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts);
   const depth = db.settings.depth || 0;
-  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth);
+  const dd = derived(rep);
+  const hasAlts = dd.mainKeys.size < dd.keys.size;
+  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts);
   const pct = pctOf(s.learned, s.total);
 
   return html`<div class="stack">
@@ -162,6 +164,9 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
         <input id="depth-range" type="range" min="5" max="16" step="1" value=${depth || 16} aria-valuetext=${depth ? `bis Zug ${depth}` : 'alle Züge'}
           onInput=${ev => { const v = +ev.target.value; setSettings({ depth: v > 15 ? 0 : v }); }} />
         <div class="depth-scale"><span>5</span><span>10</span><span>15+</span></div>
+        ${hasAlts && html`<label class="check alts" title="Aus: Es wird nur die Hauptvariante abgefragt (jeweils der erste Zug im PGN). Alternativen bleiben im Repertoire.">
+          <input type="checkbox" checked=${!!db.settings.alts} onChange=${ev => setSettings({ alts: ev.target.checked })} /> Auch Alternativzüge trainieren
+        </label>`}
       </div>
     </div>
 

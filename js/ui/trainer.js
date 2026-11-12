@@ -246,7 +246,7 @@ class Engine {
 
 const MODE_TITLE = { learn: 'Lernen', review: 'Wiederholen', practice: 'Üben' };
 
-export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settings, setSettings, onGrade, onExit, onMore }) {
+export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settings, setSettings, onGrade, onExit, onMore, onDone }) {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const d = derived(rep);
@@ -272,6 +272,13 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   };
 
   useEffect(() => () => eng.current && eng.current.destroy(), []);
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!reported.current && eng.current && eng.current.phase === 'finished') {
+      reported.current = true;
+      if (onDone) onDone(eng.current.stats);
+    }
+  });
   useEffect(() => {
     const h = ev => {
       const e = eng.current;

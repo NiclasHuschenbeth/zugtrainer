@@ -57,6 +57,7 @@ export function CompareView({ db, go, train, setSettings }) {
   };
 
   const head = html`<h1>Abgleich mit deinen Partien</h1>
+    <p class="muted">Wo bist du in deinen Partien von deinem Repertoire abgewichen, und welche Gegnerzüge fehlen dir noch?</p>
     <p class="muted">Lege fest, welches Repertoire für deine Weiß- und welches für deine Schwarzpartien gilt. Klicke eine Farbe an, um deren Auswertung zu sehen.</p>
     <div class="grid2">${picker('white')}${picker('black')}</div>`;
 

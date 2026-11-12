@@ -2,56 +2,172 @@ import { html, useState } from 'preact';
 import { parseRepertoirePgn } from '../lib/repertoire.js';
 import { dayKey, lastDays, repStats, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
+import { Menu, MenuDivider, MenuItem } from './menu.js';
+import { InstallHint, Onboarding } from './onboarding.js';
 
-function Today({ db, setGoal, train }) {
+const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+/** Tagesziel als Ring (Orange als Akzentfläche). */
+function Ring({ value, max }) {
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  const p = Math.min(1, max ? value / max : 0);
+  return html`<svg class="ring" viewBox="0 0 90 90" role="img" aria-label=${`${value} von ${max} Zügen`}>
+    <circle cx="45" cy="45" r=${r} fill="none" stroke="#E8EFF6" stroke-width="10" />
+    ${p > 0 && html`<circle cx="45" cy="45" r=${r} fill="none" stroke="#F0AA64" stroke-width="10" stroke-linecap="round"
+      stroke-dasharray=${`${c * p} ${c}`} transform="rotate(-90 45 45)" />`}
+    <text x="45" y="52" text-anchor="middle" class="ring-n">${value}</text>
+  </svg>`;
+}
+
+/** Oben auf der Startseite: Was ist heute fällig, Tagesziel, Serie. */
+function Home({ db, setGoal, train }) {
   const a = db.activity;
   const today = a.days[dayKey()] || 0;
   const streak = streakOf(a);
   const week = lastDays(a);
-  const max = Math.max(a.goal, ...week.map(d => d.n));
-  const dueByRep = db.repertoires.map(rep => ({ rep, due: repStats(rep, db.progress[rep.id] || {}).due }));
-  const due = dueByRep.reduce((s, x) => s + x.due, 0);
-  const next = dueByRep.filter(x => x.due).sort((x, y) => y.due - x.due)[0];
+  const max = Math.max(a.goal, ...week.map(d => d.n), 1);
   const done = today >= a.goal;
+  const stats = db.repertoires.map(rep => ({ rep, s: repStats(rep, db.progress[rep.id] || {}) }));
+  const due = stats.reduce((n, x) => n + x.s.due, 0);
+  const dueReps = stats.filter(x => x.s.due);
+  const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
+  const fresh = stats.find(x => x.s.total - x.s.learned > 0);
 
-  return html`<div class="card today">
-    <div class="today-main">
-      <div class="eyebrow">Heute</div>
-      <div class="big">${today} <span class="muted">/ ${a.goal} Züge</span> ${done && html`<span class="ok">✓</span>`}</div>
-      <div class="progress"><div style=${{ width: `${Math.min(100, (today / a.goal) * 100)}%` }}></div></div>
-      <label class="inline small">Tagesziel
-        <select value=${a.goal} onChange=${e => setGoal(+e.target.value)}>
+  return html`<div class="home-top">
+    <div class="card hero">
+      <div class="eyebrow">Heute fällig</div>
+      <div class="hero-n">${due} <span>${due === 1 ? 'Zug' : 'Züge'}</span></div>
+      <p class="muted">
+        ${due
+          ? dueReps.length > 1
+            ? `aus ${dueReps.length} Repertoires`
+            : `aus „${next.rep.name}“`
+          : 'Heute ist nichts fällig. Nutze die Zeit für neue Züge.'}
+      </p>
+      ${due
+        ? html`<button class="btn primary big" onClick=${() => train(next.rep.id, 'review')}>Jetzt wiederholen</button>`
+        : fresh && html`<button class="btn primary big" onClick=${() => train(fresh.rep.id, 'learn')}>Neue Züge lernen</button>`}
+    </div>
+
+    <div class="card stat">
+      <div class="eyebrow">Tagesziel</div>
+      <${Ring} value=${today} max=${a.goal} />
+      <div class="small">${done ? 'Geschafft!' : `von ${a.goal} Zügen`}</div>
+      <label class="inline small">Ziel
+        <select aria-label="Tagesziel" value=${a.goal} onChange=${e => setGoal(+e.target.value)}>
           ${[10, 20, 30, 50, 100].map(v => html`<option value=${v}>${v} Züge</option>`)}
         </select>
       </label>
     </div>
-    <div class="today-stat">
+
+    <div class="card stat streak">
       <div class="eyebrow">Serie</div>
-      <div class="big">${streak > 0 ? '🔥 ' : ''}${streak} <span class="muted">${streak === 1 ? 'Tag' : 'Tage'}</span></div>
-      <div class="muted small">${done ? 'Tagesziel erreicht!' : streak > 0 ? 'Heute noch trainieren, um die Serie zu halten.' : 'Erreiche dein Tagesziel, um eine Serie zu starten.'}</div>
+      <div class="big">${streak}</div>
+      <div class="small">${streak === 1 ? 'Tag' : 'Tage'} in Folge</div>
+      <div class="small hint">${done ? 'Tagesziel erreicht!' : streak > 0 ? 'Heute noch trainieren, um die Serie zu halten.' : 'Erreiche dein Tagesziel, um eine Serie zu starten.'}</div>
     </div>
-    <div class="today-stat">
-      <div class="eyebrow">Fällig</div>
-      <div class="big">${due} <span class="muted">${due === 1 ? 'Zug' : 'Züge'}</span></div>
-      ${next
-        ? html`<button class="btn accent small" onClick=${() => train(next.rep.id, 'review')}>Jetzt wiederholen</button>`
-        : html`<div class="muted small">Nichts zu wiederholen.</div>`}
-    </div>
-    <div class="week" title="Abgefragte Züge der letzten 7 Tage">
+
+    <div class="week-mini" title="Abgefragte Züge der letzten 7 Tage">
+      <span class="muted small">Letzte 7 Tage</span>
       ${week.map(d => html`<div class="day">
-        <div class="bar"><div class=${d.n >= a.goal ? 'full' : ''} style=${{ height: `${(d.n / max) * 100}%` }}></div></div>
+        <div class="bar"><div class=${d.n >= a.goal ? 'full' : ''} style=${{ height: `${Math.max(d.n ? 12 : 0, (d.n / max) * 100)}%` }}></div></div>
         <span>${d.label}</span>
       </div>`)}
     </div>
   </div>`;
 }
 
-export function RepertoiresView({ db, setGoal, addRepertoire, newRepertoire, removeRepertoire, train, edit, scrim }) {
+export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open }) {
+  const reps = color => db.repertoires.filter(r => r.color === color);
+  const hasProgress = Object.values(db.progress).some(p => Object.keys(p).length > 0);
+  const onboarding = !db.settings.onboarded && !db.sync.last;
+  if (onboarding) {
+    const step = db.repertoires.length === 0 ? 1 : hasProgress ? 3 : 2;
+    return html`<div class="stack">
+      <${Onboarding} step=${step} rep=${db.repertoires[0]} train=${train} goal=${db.activity.goal} setGoal=${setGoal} finish=${() => setSettings({ onboarded: true })} />
+      ${step === 1 && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${false} />`}
+    </div>`;
+  }
+  const showInstall = (db.settings.lessons || 0) >= 1 && !db.settings.installHint;
+  const group = (title, list) =>
+    list.length > 0 &&
+    html`<section class="stack">
+      <h2 class="section">${title}</h2>
+      <div class="rep-grid">${list.map(rep => html`<${RepTile} key=${rep.id} rep=${rep} progress=${db.progress[rep.id] || {}} open=${() => open(rep.id)} />`)}</div>
+    </section>`;
+
   return html`<div class="stack">
-    ${db.repertoires.length > 0 && html`<${Today} db=${db} setGoal=${setGoal} train=${train} />`}
+    ${showInstall && html`<${InstallHint} dismiss=${() => setSettings({ installHint: 'dismissed' })} />`}
+    ${db.repertoires.length > 0 && html`<${Home} db=${db} setGoal=${setGoal} train=${train} />`}
     <${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${db.repertoires.length > 0} />
     ${db.repertoires.length === 0 && html`<p class="muted center">Noch kein Repertoire vorhanden. Lade eine PGN-Datei hoch oder probiere das Beispiel aus.</p>`}
-    ${db.repertoires.map(rep => html`<${RepCard} key=${rep.id} rep=${rep} progress=${db.progress[rep.id] || {}} remove=${() => removeRepertoire(rep.id)} train=${train} edit=${() => edit(rep.id)} scrim=${() => scrim(rep.id)} />`)}
+    ${group('Repertoires mit Weiß', reps('white'))}
+    ${group('Repertoires mit Schwarz', reps('black'))}
+  </div>`;
+}
+
+function RepTile({ rep, progress, open }) {
+  const s = repStats(rep, progress);
+  const pct = pctOf(s.learned, s.total);
+  return html`<button class="card tile" onClick=${open}>
+    <div class="row between">
+      <h3 class="flat">${rep.name}</h3>
+      ${s.due > 0 && html`<span class="chip">${s.due} fällig</span>`}
+    </div>
+    <div class="muted small">${rep.chapters.length} Kapitel · ${s.lines} Linien · ${s.total} Züge</div>
+    <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>
+    <div class="muted small">${s.learned} von ${s.total} Zügen gelernt (${pct} %)</div>
+  </button>`;
+}
+
+/** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
+export function RepertoireView({ db, rep, train, edit, scrim, compare, remove, back }) {
+  const s = repStats(rep, db.progress[rep.id] || {});
+  const fresh = s.total - s.learned;
+  const pct = pctOf(s.learned, s.total);
+
+  return html`<div class="stack">
+    <div><button class="link" onClick=${back}>← Alle Repertoires</button></div>
+    <div class="card">
+      <div class="row between top-align">
+        <div>
+          <h1 class="rep-title">${rep.name}</h1>
+          <div class="muted small">
+            <span class=${`pill ${rep.color}`}>${rep.color === 'white' ? 'Weiß' : 'Schwarz'}</span>
+            ${rep.chapters.length} Kapitel · ${s.lines} Linien · ${s.total} Züge
+          </div>
+        </div>
+        <${Menu} label="Werkzeuge" className="btn" align="right">
+          <${MenuItem} title="Editor" hint="Züge, Varianten und Kommentare bearbeiten" onClick=${() => edit(rep.id)} />
+          <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch?" onClick=${() => edit(rep.id, 'coverage')} />
+          <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
+          <${MenuItem} title="Abgleich mit meinen Partien" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
+          <${MenuDivider} />
+          <${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />
+        <//>
+      </div>
+      <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>
+      <div class="muted small">${s.learned} von ${s.total} Zügen gelernt (${pct} %)</div>
+      <div class="row main-actions">
+        <button class="btn primary big" disabled=${!fresh} onClick=${() => train(rep.id, 'learn')}>Neue Züge lernen${fresh ? ` (${fresh})` : ''}</button>
+        <button class=${`btn big ${s.due ? 'accent' : ''}`} disabled=${!s.due} onClick=${() => train(rep.id, 'review')}>Wiederholen${s.due ? ` (${s.due})` : ''}</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Kapitel</h2>
+      <div class="chapters">
+        ${s.chapters.map((c, i) => html`<div class="chapter">
+          <div class="grow">
+            <b>${c.name}</b>
+            <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
+            <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
+          </div>
+          <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', i)}>Lernen</button>
+        </div>`)}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -124,51 +240,4 @@ function Upload({ addRepertoire, newRepertoire, hasAny }) {
       ${hasAny && html`<button class="btn ghost" type="button" onClick=${() => setOpen(false)}>Abbrechen</button>`}
     </div>
   </form>`;
-}
-
-function RepCard({ rep, progress, remove, train, edit, scrim }) {
-  const [open, setOpen] = useState(false);
-  const s = repStats(rep, progress);
-  const fresh = s.total - s.learned;
-  const pct = s.total ? Math.round((s.learned / s.total) * 100) : 0;
-
-  return html`<div class="card">
-    <div class="row between">
-      <div>
-        <h2>${rep.name}</h2>
-        <div class="muted small">
-          <span class=${`pill ${rep.color}`}>${rep.color === 'white' ? 'Weiß' : 'Schwarz'}</span>
-          ${rep.chapters.length} Kapitel · ${s.lines} Linien · ${s.total} Züge
-        </div>
-      </div>
-      <div class="row">
-        <button class="btn primary" disabled=${!fresh} onClick=${() => train(rep.id, 'learn')}>Lernen${fresh ? ` (${fresh} neu)` : ''}</button>
-        <button class=${`btn ${s.due ? 'accent' : ''}`} disabled=${!s.due} onClick=${() => train(rep.id, 'review')}>Wiederholen${s.due ? ` (${s.due})` : ''}</button>
-        <button class="btn" disabled=${!s.total} onClick=${scrim} title="Repertoire gegen echte Gegnerzüge spielen">Testpartie</button>
-        <button class="btn" onClick=${edit} title="Züge, Varianten und Kommentare bearbeiten, mit Engine und Datenbank">Editor / Analyse</button>
-      </div>
-    </div>
-    <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>
-    <div class="row between small muted">
-      <span>${s.learned} von ${s.total} Zügen gelernt (${pct} %)</span>
-      <span>
-        <button class="link" onClick=${() => setOpen(!open)}>${open ? 'Kapitel ausblenden' : 'Kapitel anzeigen'}</button>
-        ${' · '}
-        <button class="link" onClick=${edit}>Bearbeiten</button>
-        ${' · '}
-        <button class="link danger" onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()}>Löschen</button>
-      </span>
-    </div>
-    ${open && html`<table class="table">
-      <thead><tr><th>Kapitel</th><th>Linien</th><th>Gelernt</th><th></th></tr></thead>
-      <tbody>
-        ${s.chapters.map((c, i) => html`<tr>
-          <td>${c.name}</td>
-          <td>${c.lines}</td>
-          <td>${c.learned} / ${c.total}</td>
-          <td class="right"><button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', i)}>Lernen</button></td>
-        </tr>`)}
-      </tbody>
-    </table>`}
-  </div>`;
 }

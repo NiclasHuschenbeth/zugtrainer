@@ -18,7 +18,7 @@ const GLYPHS = ['!', '?', '!!', '??', '!?', '?!'];
 const POS = [['=', 'ausgeglichen'], ['∞', 'unklar'], ['⩲', 'Weiß steht etwas besser'], ['⩱', 'Schwarz steht etwas besser'], ['±', 'Weiß steht besser'], ['∓', 'Schwarz steht besser'], ['+−', 'Weiß steht auf Gewinn'], ['−+', 'Schwarz steht auf Gewinn']];
 const annotated = n => !!(n.comment || (n.shapes && n.shapes.length));
 
-export function Editor({ rep, at, settings, setSettings, saveRep, onExit }) {
+export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit }) {
   const work = useRef(null);
   if (!work.current) work.current = structuredClone(rep);
   const w = work.current;
@@ -35,6 +35,15 @@ export function Editor({ rep, at, settings, setSettings, saveRep, onExit }) {
   const arrows = settings.varArrows !== false;
   const cg = useRef(null);
   const timer = useRef(null);
+
+  useEffect(() => {
+    if (focus !== 'coverage') return;
+    const t = setTimeout(() => {
+      const el = document.getElementById('coverage-panel');
+      if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Änderungen am Arbeitsstand speichern (leicht verzögert, damit Tippen flüssig bleibt)
   const commit = () => {
@@ -618,7 +627,7 @@ function CoveragePanel({ rep, settings, setSettings, onJump }) {
   const missing = res ? res.gaps.filter(g => g.type !== 'end') : [];
   const ends = res ? res.gaps.filter(g => g.type === 'end') : [];
 
-  return html`<div class="card">
+  return html`<div class="card" id="coverage-panel">
     <div class="row between">
       <h3 class="flat">Abdeckung</h3>
       <select class="auto" value=${settings.coverMin} onChange=${e => setSettings({ coverMin: +e.target.value })} title="Ab welchem Anteil an allen Partien ein fehlender Zug gemeldet wird">

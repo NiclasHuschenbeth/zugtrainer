@@ -323,6 +323,7 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
         </div>
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>
+      <p class="muted small">Du spielst dein Repertoire gegen echte Gegnerzüge. Verlässt die Partie dein Repertoire, bewertet die Engine die Stellung.</p>
       <label class="small">Gegner
         <select value=${opp} onChange=${e => setSettings({ opponent: e.target.value })}>
           ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label}</option>`)}

@@ -61,6 +61,23 @@ export function repStats(rep, progress, now = Date.now()) {
   return { lines: d.lines.length, total: d.keys.size, learned, due, chapters };
 }
 
+export const DEPTHS = [5, 8, 10, 12, 15, 0]; // 0 = alle
+
+/** Zugnummer (ganzer Zug) des i-ten Zugs einer Linie. */
+const moveNo = (line, i) => parseInt((i ? line.nodes[i - 1].fen : line.startFen).split(' ')[5], 10) || 1;
+const inDepth = (line, i, depth) => !depth || moveNo(line, i) <= depth;
+
+/** Anzahl neuer Züge, die bei dieser Tiefe (bis Zug N, 0 = alle) noch zu lernen sind. */
+export function freshCount(rep, progress, depth = 0) {
+  const seen = new Set();
+  for (const line of derived(rep).lines) {
+    line.keys.forEach((k, i) => {
+      if (k && !progress[k] && inDepth(line, i, depth)) seen.add(k);
+    });
+  }
+  return seen.size;
+}
+
 /**
  * Aufgaben einer Sitzung. Jede Aufgabe: eine Linie + Indizes der abzufragenden Züge.
  * mode: 'learn' (neue Züge), 'review' (fällige Züge), 'practice' (Linie mit bestimmtem Zug).
@@ -112,6 +129,7 @@ export function buildTasks(rep, progress, mode, opts = {}) {
     const ask = [];
     line.keys.forEach((k, i) => {
       if (!k || seen.has(k)) return;
+      if (mode === 'learn' && !inDepth(line, i, opts.depth)) return;
       const c = progress[k];
       if (mode === 'learn' ? !c : c && c.due <= now) ask.push(i);
     });

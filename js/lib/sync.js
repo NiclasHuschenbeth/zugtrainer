@@ -8,7 +8,7 @@
 //                    seit dem letzten Abgleich geändert, bleibt der ältere Stand als Kopie erhalten.
 //   Gelöschtes:      wird als gelöscht markiert (sonst käme es vom anderen Gerät zurück).
 
-export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded'];
+export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded', 'depth'];
 const DAY = 86400000;
 const BATCH = 500;
 

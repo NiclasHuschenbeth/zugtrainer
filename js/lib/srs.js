@@ -42,11 +42,13 @@ export function gradeCard(card, ok, mode, now = Date.now()) {
   return { level, due: now + INTERVALS[level], lapses: prev.lapses + (ok ? 0 : 1), at: now };
 }
 
-export function repStats(rep, progress, now = Date.now()) {
+export function repStats(rep, progress, alts = false, now = Date.now()) {
   const d = derived(rep);
+  const keys = alts ? d.keys : d.mainKeys;
+  const chapterKeys = alts ? d.chapterKeys : d.chapterMainKeys;
   let learned = 0;
   let due = 0;
-  for (const k of d.keys) {
+  for (const k of keys) {
     const c = progress[k];
     if (c) {
       learned++;
@@ -55,10 +57,10 @@ export function repStats(rep, progress, now = Date.now()) {
   }
   const chapters = rep.chapters.map((ch, i) => {
     let l = 0;
-    for (const k of d.chapterKeys[i]) if (progress[k]) l++;
-    return { name: ch.name, lines: d.chapterLines[i], total: d.chapterKeys[i].size, learned: l };
+    for (const k of chapterKeys[i]) if (progress[k]) l++;
+    return { name: ch.name, lines: d.chapterLines[i], total: chapterKeys[i].size, learned: l };
   });
-  return { lines: d.lines.length, total: d.keys.size, learned, due, chapters };
+  return { lines: d.lines.length, total: keys.size, learned, due, chapters };
 }
 
 export const DEPTHS = [5, 8, 10, 12, 15, 0]; // 0 = alle
@@ -68,11 +70,11 @@ const moveNo = (line, i) => parseInt((i ? line.nodes[i - 1].fen : line.startFen)
 const inDepth = (line, i, depth) => !depth || moveNo(line, i) <= depth;
 
 /** Anzahl neuer Züge, die bei dieser Tiefe (bis Zug N, 0 = alle) noch zu lernen sind. */
-export function freshCount(rep, progress, depth = 0) {
+export function freshCount(rep, progress, depth = 0, alts = false) {
   const seen = new Set();
   for (const line of derived(rep).lines) {
     line.keys.forEach((k, i) => {
-      if (k && !progress[k] && inDepth(line, i, depth)) seen.add(k);
+      if (k && !progress[k] && inDepth(line, i, depth) && (alts || !line.alt[i])) seen.add(k);
     });
   }
   return seen.size;
@@ -130,6 +132,7 @@ export function buildTasks(rep, progress, mode, opts = {}) {
     line.keys.forEach((k, i) => {
       if (!k || seen.has(k)) return;
       if (mode === 'learn' && !inDepth(line, i, opts.depth)) return;
+      if (!opts.alts && line.alt[i] && mode !== 'practice') return;
       const c = progress[k];
       if (mode === 'learn' ? !c : c && c.due <= now) ask.push(i);
     });

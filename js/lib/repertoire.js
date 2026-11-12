@@ -99,20 +99,23 @@ export function parseRepertoirePgn(pgn) {
 function linesOf(rep) {
   const lines = [];
   rep.chapters.forEach((ch, ci) => {
-    const walk = (nodes, path) => {
-      for (const n of nodes) {
+    // alt[i]: eigener Zug ist eine Alternative (nicht die erste Fortsetzung) oder folgt auf eine solche
+    const walk = (nodes, path, alt) => {
+      nodes.forEach((n, sib) => {
         const p = path.concat(n);
-        if (n.children.length) walk(n.children, p);
+        const mine = turnOf(p.length > 1 ? p[p.length - 2].fen : ch.startFen) === rep.color;
+        const a = alt.concat(alt.some(Boolean) || (mine && sib > 0));
+        if (n.children.length) walk(n.children, p, a);
         else {
           const keys = p.map((node, i) => {
             const before = i ? p[i - 1].fen : ch.startFen;
             return turnOf(before) === rep.color ? `${epdOf(before)}|${node.san}` : null;
           });
-          if (keys.some(Boolean)) lines.push({ chapter: ci, startFen: ch.startFen, nodes: p, keys });
+          if (keys.some(Boolean)) lines.push({ chapter: ci, startFen: ch.startFen, nodes: p, keys, alt: a });
         }
-      }
+      });
     };
-    walk(ch.children, []);
+    walk(ch.children, [], []);
   });
   return lines;
 }
@@ -143,6 +146,8 @@ export function derived(rep) {
     const lines = linesOf(rep);
     const keys = new Set();
     const chapterKeys = rep.chapters.map(() => new Set());
+    const mainKeys = new Set(); // ohne Alternativzüge
+    const chapterMainKeys = rep.chapters.map(() => new Set());
     const chapterLines = rep.chapters.map(() => 0);
     for (const l of lines) {
       chapterLines[l.chapter]++;
@@ -150,10 +155,14 @@ export function derived(rep) {
         if (k) {
           keys.add(k);
           chapterKeys[l.chapter].add(k);
+          if (!l.alt[l.keys.indexOf(k)]) {
+            mainKeys.add(k);
+            chapterMainKeys[l.chapter].add(k);
+          }
         }
       }
     }
-    d = { lines, index: buildIndex(rep), keys, chapterKeys, chapterLines };
+    d = { lines, index: buildIndex(rep), keys, chapterKeys, mainKeys, chapterMainKeys, chapterLines };
     cache.set(rep, d);
   }
   return d;

@@ -554,6 +554,7 @@ function CloudPanel({ fen, enabled, setEnabled, onPlay, onEval }) {
       <h3 class="flat">Cloud-Bewertung <span class="muted small">ChessDB</span></h3>
       <label class="check"><input type="checkbox" checked=${enabled} onChange=${e => setEnabled(e.target.checked)} /> an</label>
     </div>
+    ${!enabled && html`<p class="muted small">Zeigt Computer-Bewertungen für die aktuelle Stellung. Beim Einschalten werden die Stellung und deine IP-Adresse an den Dienst chessdb.cn gesendet (Server in China).</p>`}
     ${enabled && html`
       ${cur && cur.error && html`<div class="msg bad">${cur.error}</div>`}
       ${!cur && html`<span class="muted small">lädt …</span>`}

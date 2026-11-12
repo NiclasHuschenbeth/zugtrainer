@@ -4,7 +4,7 @@ import { CONFIG } from '../config.js';
 const fmt = ts => (ts ? new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie');
 
 /** Anmelde-Fenster (E-Mail-Link) bzw. Kontoübersicht mit Abgleich-Status. */
-export function AccountDialog({ account, status, lastSync, onClose, onSend, onVerify, onSyncNow, onSignOut }) {
+export function AccountDialog({ account, status, lastSync, onClose, onSend, onVerify, onSyncNow, onSignOut, onDelete }) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState('email'); // email | sent
@@ -66,6 +66,7 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
               <button class="btn" onClick=${() => run(onSignOut)}>Abmelden</button>
             </div>
             <p class="muted small">Beim Abmelden werden die Daten von diesem Gerät entfernt. Sie bleiben in deinem Konto und kommen bei der nächsten Anmeldung zurück.</p>
+            <p class="small"><button class="link danger" onClick=${() => run(onDelete)}>Konto und alle Daten im Konto löschen</button></p>
           `
         : step === 'email'
           ? html`<form class="stack" onSubmit=${send}>

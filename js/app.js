@@ -12,7 +12,7 @@ import { Editor } from './ui/editor.js';
 import { Scrim } from './ui/scrim.js';
 import { CONFIG } from './config.js';
 import { AccountDialog } from './ui/account.js';
-import { cloudEnabled, currentSession, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
+import { cloudEnabled, currentSession, deleteAccount, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
 import { emptySync, runSync } from './lib/sync.js';
 
 const SYNC_KEYS = ['repertoires', 'progress', 'activity', 'settings', 'sync'];
@@ -125,6 +125,17 @@ function App() {
       }
     })();
   }, []);
+
+  const doDelete = async () => {
+    if (!confirm('Dein Konto und alle im Konto gespeicherten Daten (Repertoires, Lernfortschritt, Einstellungen) werden unwiderruflich gelöscht. Die Daten auf diesem Gerät bleiben bestehen. Wirklich löschen?')) return;
+    clearTimeout(timer.current);
+    await deleteAccount();
+    accountRef.current = null;
+    setAccountState(null);
+    update({ sync: emptySync() }, { fromSync: true });
+    setSyncStatus('idle');
+    setShowAccount(false);
+  };
 
   const doSignOut = async () => {
     clearTimeout(timer.current);
@@ -262,6 +273,7 @@ function App() {
       }}
       onSyncNow=${() => doSync()}
       onSignOut=${doSignOut}
+      onDelete=${doDelete}
     />`}
     <main class=${view.name === 'edit' ? 'wide' : ''}>${body}</main>
     <footer class="foot">

@@ -1,5 +1,25 @@
-import { html, useState } from 'preact';
+import { html, useEffect, useRef, useState } from 'preact';
 import { CONFIG } from '../config.js';
+
+/** Lädt Cloudflare Turnstile erst, wenn jemand die Anmeldung öffnet. */
+let turnstileScript = null;
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (!turnstileScript) {
+    turnstileScript = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true;
+      s.onload = () => resolve(window.turnstile);
+      s.onerror = () => {
+        turnstileScript = null;
+        reject(new Error('Der Bot-Schutz konnte nicht geladen werden. Bist du online?'));
+      };
+      document.head.appendChild(s);
+    });
+  }
+  return turnstileScript;
+}
 
 const fmt = ts => (ts ? new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie');
 
@@ -10,6 +30,40 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
   const [step, setStep] = useState('email'); // email | sent
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [token, setToken] = useState('');
+  const box = useRef(null);
+  const widget = useRef(null);
+  const needCaptcha = !!CONFIG.turnstileSiteKey;
+
+  // Bot-Schutz: das Feld erscheint nur im Anmeldeformular
+  useEffect(() => {
+    if (!needCaptcha || account || step !== 'email' || !box.current) return;
+    let gone = false;
+    loadTurnstile()
+      .then(ts => {
+        if (gone || !box.current) return;
+        widget.current = ts.render(box.current, {
+          sitekey: CONFIG.turnstileSiteKey,
+          theme: 'dark',
+          language: 'de',
+          callback: t => setToken(t),
+          'expired-callback': () => setToken(''),
+          'error-callback': () => setToken(''),
+        });
+      })
+      .catch(err => setError(err.message));
+    return () => {
+      gone = true;
+      if (widget.current != null && window.turnstile) {
+        try {
+          window.turnstile.remove(widget.current);
+        } catch {
+          // egal
+        }
+      }
+      widget.current = null;
+    };
+  }, [account, step]);
 
   const run = async fn => {
     setBusy(true);
@@ -25,7 +79,14 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
   const send = ev => {
     ev.preventDefault();
     run(async () => {
-      await onSend(email.trim());
+      try {
+        await onSend(email.trim(), token);
+      } catch (err) {
+        // Ein Token gilt nur einmal: neues anfordern
+        setToken('');
+        if (widget.current != null && window.turnstile) window.turnstile.reset(widget.current);
+        throw err;
+      }
       setStep('sent');
     });
   };
@@ -77,9 +138,10 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
               <label>E-Mail-Adresse
                 <input type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)} placeholder="du@beispiel.de" />
               </label>
+              ${needCaptcha && html`<div ref=${box} class="captcha"></div>`}
               ${error && html`<div class="msg bad">${error}</div>`}
               <div class="row">
-                <button class="btn primary" type="submit" disabled=${busy || !email}>${busy ? 'Sende …' : 'Anmelde-Link senden'}</button>
+                <button class="btn primary" type="submit" disabled=${busy || !email || (needCaptcha && !token)}>${busy ? 'Sende …' : 'Anmelde-Link senden'}</button>
               </div>
               <p class="muted small">
                 Mit der Anmeldung stimmst du der Verarbeitung deiner E-Mail-Adresse zur Kontoverwaltung zu, siehe${' '}

@@ -21,6 +21,7 @@ class Engine {
     this.timers = new Set();
     this.taskNo = 0;
     this.stats = { ok: 0, bad: 0 };
+    this.missed = new Map(); // Schlüssel -> { line, i } der verpassten Züge
     this.phase = 'idle';
     this.message = null;
     this.shown = 0;
@@ -184,6 +185,8 @@ class Engine {
     if (!this.errors.has(this.i)) {
       this.errors.add(this.i);
       this.stats.bad++;
+      const key = this.line.keys[this.i];
+      if (key && !this.missed.has(key)) this.missed.set(key, { line: this.line, i: this.i });
     }
   }
 
@@ -246,11 +249,11 @@ class Engine {
 
 const MODE_TITLE = { learn: 'Lernen', review: 'Wiederholen', practice: 'Üben' };
 
-export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settings, setSettings, onGrade, onExit, onMore, onDone }) {
+export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settings, setSettings, onGrade, onExit, onMore, onDone, onPractice, redo }) {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const d = derived(rep);
-  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits }), []);
+  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0 }), []);
   const [, force] = useReducer(x => x + 1, 0);
   const eng = useRef(null);
   const gradeRef = useRef(onGrade);
@@ -294,7 +297,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   if (!tasks.length) {
     return html`<div class="card center">
       <h2>${MODE_TITLE[mode]}: ${rep.name}</h2>
-      <p>${mode === 'learn' ? 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Linie wurde im Repertoire nicht gefunden.'}</p>
+      <p>${mode === 'learn' ? settings.depth ? `Bis Zug ${settings.depth} ist hier alles gelernt. Stell die Lerntiefe höher, um weiterzumachen.` : 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Linie wurde im Repertoire nicht gefunden.'}</p>
       <button class="btn primary" onClick=${onExit}>Zurück zur Übersicht</button>
     </div>`;
   }
@@ -321,14 +324,15 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
       <div class="muted small">
         ${Array.isArray(focusKey) ? 'Stellung' : 'Linie'} ${Math.min(taskNo + 1, tasks.length)} von ${tasks.length}
         ${mode === 'learn' && visits && visits.size > 0 && ' · häufigste Linien aus deinen Partien zuerst'}
-        ${Array.isArray(focusKey) && ' · hier bist du in deinen Partien abgewichen'}
+        ${Array.isArray(focusKey) && (redo ? ' · deine Fehler aus der letzten Sitzung' : ' · hier bist du in deinen Partien abgewichen')}
       </div>
 
       ${finished
         ? html`<div class="finish">
             <h3>Sitzung beendet</h3>
-            <p><b class="ok">${e.stats.ok}</b> richtig · <b class="bad">${e.stats.bad}</b> ${e.stats.bad === 1 ? 'Fehler' : 'Fehler'}</p>
+            <${Result} e=${e} />
             <div class="row">
+              ${e.missed.size > 0 && onPractice && html`<button class="btn accent" onClick=${() => onPractice([...e.missed.keys()])}>Fehler nochmal üben (${e.missed.size})</button>`}
               ${mode === 'learn' && html`<button class="btn primary" onClick=${onMore}>Weiter lernen</button>`}
               <button class="btn" onClick=${onExit}>Zurück zur Übersicht</button>
             </div>
@@ -350,6 +354,29 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
         <label class="check"><input type="checkbox" checked=${settings.sound} onChange=${ev => setSettings({ sound: ev.target.checked })} /> Ton</label>
       </div>
     </div>
+  </div>`;
+}
+
+function Result({ e }) {
+  const { ok, bad } = e.stats;
+  const total = ok + bad;
+  const pct = total ? Math.round((ok / total) * 100) : 0;
+  const missed = [...e.missed.values()];
+  return html`<div class="result">
+    <div class="result-nums">
+      <div><b class="ok">${ok}</b><span>richtig</span></div>
+      <div><b class="bad">${bad}</b><span>${bad === 1 ? 'falsch' : 'falsch'}</span></div>
+      ${total > 0 && html`<div><b>${pct} %</b><span>von ${total} Abfragen</span></div>`}
+    </div>
+    ${missed.length > 0 && html`<div>
+      <div class="small muted">Das hast du verpasst:</div>
+      <ul class="missed">
+        ${missed.map(m => {
+          const before = m.i ? m.line.nodes[m.i - 1].fen : m.line.startFen;
+          return html`<li>${moveLabel(before)} <b>${de(m.line.nodes[m.i].san)}</b></li>`;
+        })}
+      </ul>
+    </div>`}
   </div>`;
 }
 

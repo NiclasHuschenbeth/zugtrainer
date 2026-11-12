@@ -1,6 +1,6 @@
 import { html, useState } from 'preact';
 import { parseRepertoirePgn } from '../lib/repertoire.js';
-import { dayKey, lastDays, repStats, streakOf } from '../lib/srs.js';
+import { dayKey, freshCount, lastDays, repStats, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
@@ -32,7 +32,7 @@ function Home({ db, setGoal, train }) {
   const due = stats.reduce((n, x) => n + x.s.due, 0);
   const dueReps = stats.filter(x => x.s.due);
   const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
-  const fresh = stats.find(x => x.s.total - x.s.learned > 0);
+  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0) > 0);
 
   return html`<div class="home-top">
     <div class="card hero">
@@ -122,9 +122,10 @@ function RepTile({ rep, progress, open }) {
 }
 
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
-export function RepertoireView({ db, rep, train, edit, scrim, compare, remove, back }) {
+export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compare, remove, back }) {
   const s = repStats(rep, db.progress[rep.id] || {});
-  const fresh = s.total - s.learned;
+  const depth = db.settings.depth || 0;
+  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth);
   const pct = pctOf(s.learned, s.total);
 
   return html`<div class="stack">
@@ -152,6 +153,15 @@ export function RepertoireView({ db, rep, train, edit, scrim, compare, remove, b
       <div class="row main-actions">
         <button class="btn primary big" disabled=${!fresh} onClick=${() => train(rep.id, 'learn')}>Neue Züge lernen${fresh ? ` (${fresh})` : ''}</button>
         <button class=${`btn big ${s.due ? 'accent' : ''}`} disabled=${!s.due} onClick=${() => train(rep.id, 'review')}>Wiederholen${s.due ? ` (${s.due})` : ''}</button>
+      </div>
+      <div class="depth">
+        <div class="row between">
+          <label for="depth-range" class="small muted" title="Es werden nur Züge bis zu dieser Zugnummer neu abgefragt. Die übrigen Varianten bleiben im Repertoire.">Lerntiefe</label>
+          <b class="depth-val">${depth ? `bis Zug ${depth}` : 'alle Züge (15+)'}</b>
+        </div>
+        <input id="depth-range" type="range" min="5" max="16" step="1" value=${depth || 16} aria-valuetext=${depth ? `bis Zug ${depth}` : 'alle Züge'}
+          onInput=${ev => { const v = +ev.target.value; setSettings({ depth: v > 15 ? 0 : v }); }} />
+        <div class="depth-scale"><span>5</span><span>10</span><span>15+</span></div>
       </div>
     </div>
 

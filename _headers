@@ -1,0 +1,13 @@
+# Einstellungen für Cloudflare Pages / Netlify
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Bibliotheken ändern sich nur mit neuer Version
+/vendor/*
+  Cache-Control: public, max-age=604800
+
+# Der Service Worker muss immer frisch geladen werden
+/sw.js
+  Cache-Control: no-cache

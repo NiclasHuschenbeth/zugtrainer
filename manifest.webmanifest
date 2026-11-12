@@ -1,0 +1,16 @@
+{
+  "name": "Zugtrainer",
+  "short_name": "Zugtrainer",
+  "description": "Eröffnungsrepertoires lernen, wiederholen und mit den eigenen Partien abgleichen.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#161512",
+  "theme_color": "#262421",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

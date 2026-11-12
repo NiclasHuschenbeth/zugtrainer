@@ -32,8 +32,8 @@ export async function kvSet(key, value) {
 }
 
 export async function loadAll() {
-  const [repertoires, progress, games, accounts, activity, settings] = await Promise.all(
-    ['repertoires', 'progress', 'games', 'accounts', 'activity', 'settings'].map(k => kvGet(k).catch(() => undefined)),
+  const [repertoires, progress, games, accounts, activity, settings, sync] = await Promise.all(
+    ['repertoires', 'progress', 'games', 'accounts', 'activity', 'settings', 'sync'].map(k => kvGet(k).catch(() => undefined)),
   );
   return {
     settings: { teach: true, sound: true, compare: {}, explorer: 'all', engine: false, cloud: true, coverMin: 0.02, lichessToken: null, ...(settings || {}) },
@@ -42,5 +42,6 @@ export async function loadAll() {
     progress: progress || {},
     games: games || [],
     accounts: accounts || { lichess: '', chesscom: '' },
+    sync: { userId: null, last: 0, cardsPull: 0, cardsPushed: 0, tombstones: {}, ...(sync || {}) },
   };
 }

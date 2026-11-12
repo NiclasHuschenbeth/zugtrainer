@@ -56,6 +56,14 @@ p { margin: .5rem 0; }
 .top nav button:hover, .tabs button:hover { color: var(--text); background: var(--panel2); }
 .top nav button.on, .tabs button.on { color: var(--text); background: var(--panel2); font-weight: 600; }
 main { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px; flex: 1; }
+.acct { margin-left: auto; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .8rem; cursor: pointer; font: inherit; font-size: .9rem; display: inline-flex; align-items: center; gap: .4rem; }
+.acct:hover { border-color: var(--primary); }
+.acct:not(.in) { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--ok); display: inline-block; }
+.dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
+.dot.error, .dot.offline { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .3; } }
+.modal-box.account { width: min(480px, 100%); }
 .foot-links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: .4rem; }
 .foot { padding: 1rem 16px; text-align: center; color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); }
 
@@ -68,7 +76,7 @@ main { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px; flex:
 /* Forms */
 label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; color: var(--muted); }
 label.inline { flex-direction: row; align-items: center; gap: .6rem; }
-input[type=text], select, textarea {
+input[type=text], input[type=email], select, textarea {
   background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
   padding: .55rem .65rem; font: inherit; width: 100%;
 }

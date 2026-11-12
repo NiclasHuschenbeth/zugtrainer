@@ -411,3 +411,4 @@ label.check.small { font-size: .85rem; }
 .result-nums span { color: var(--muted); font-size: .8rem; }
 .missed { margin: .3rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; max-height: 9rem; overflow: auto; }
 .missed li { background: var(--bg); border-radius: 8px; padding: .2rem .6rem; font-size: .9rem; }
+.alts { margin-top: .5rem; }

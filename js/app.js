@@ -4,7 +4,8 @@ import { kvSet, loadAll } from './lib/storage.js';
 import { dayKey, gradeCard } from './lib/srs.js';
 import { positionVisits } from './lib/analysis.js';
 import { finishLogin } from './lib/lichess.js';
-import { RepertoiresView } from './ui/repertoires.js';
+import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
+import { Menu, MenuItem } from './ui/menu.js';
 import { Trainer } from './ui/trainer.js';
 import { GamesView } from './ui/games.js';
 import { CompareView } from './ui/compare.js';
@@ -16,6 +17,13 @@ import { cloudEnabled, currentSession, deleteAccount, maySignedIn, onAuthChange,
 import { emptySync, runSync } from './lib/sync.js';
 
 const SYNC_KEYS = ['repertoires', 'progress', 'activity', 'settings', 'sync'];
+
+// Installations-Hinweis (Chrome/Android): Ereignis früh abfangen, die Oberfläche zeigt es später an
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  window.__installPrompt = e;
+  window.dispatchEvent(new Event('zt-install'));
+});
 
 function App() {
   const [db, setDb] = useState(null);
@@ -109,6 +117,11 @@ function App() {
   useEffect(() => {
     (async () => {
       const d = await loadAll();
+      // Wer schon Repertoires hat, braucht die Einführung nicht mehr
+      if (d.settings.onboarded === undefined) {
+        d.settings = { ...d.settings, onboarded: d.repertoires.length > 0 };
+        kvSet('settings', d.settings);
+      }
       // Rückkehr von der Lichess-Anmeldung?
       const login = await finishLogin();
       if (login && login.token) {
@@ -150,15 +163,19 @@ function App() {
     setShowAccount(false);
   };
 
-  if (!db) return html`<p class="loading">Lade Zugtrainer …</p>`;
+  if (!db) return html`<p class="loading">Lade Modern Chess Trainer …</p>`;
 
   const go = name => setView({ name });
   const setSettings = patch => update(cur => ({ settings: { ...cur.settings, ...patch, updatedAt: Date.now() } }));
 
-  const train = (repId, mode, chapter = null, focusKey = null) => {
+  // Von der Repertoire-Seite aus gestartet? Dann führt "Zurück" wieder dorthin.
+  const here = view.name === 'rep' ? { name: 'rep', repId: view.repId } : null;
+  const back = () => setView(view.backTo || { name: 'home' });
+
+  const train = (repId, mode, chapter = null, focusKey = null, backTo = undefined) => {
     const rep = db.repertoires.find(r => r.id === repId);
     const visits = mode === 'learn' && rep && db.games.length ? positionVisits(rep, db.games) : null;
-    setView({ name: 'train', repId, mode, chapter, focusKey, visits, nonce: Date.now() });
+    setView({ name: 'train', repId, mode, chapter, focusKey, visits, nonce: Date.now(), backTo: backTo === undefined ? here : backTo });
   };
 
   const addRepertoire = ({ name, color, chapters }) => {
@@ -212,11 +229,12 @@ function App() {
       settings=${db.settings}
       setSettings=${setSettings}
       onGrade=${grade(rep.id, view.mode)}
-      onExit=${() => go(view.mode === 'practice' ? 'compare' : 'home')}
-      onMore=${() => train(rep.id, view.mode, view.chapter)}
+      onExit=${() => (view.mode === 'practice' ? go('compare') : back())}
+      onMore=${() => train(rep.id, view.mode, view.chapter, null, view.backTo)}
+      onDone=${() => view.mode !== 'practice' && update(cur => ({ settings: { ...cur.settings, lessons: (cur.settings.lessons || 0) + 1 } }))}
     />`;
   } else if (view.name === 'edit' && rep) {
-    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${() => go('home')} />`;
+    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} />`;
   } else if (view.name === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}
@@ -224,8 +242,25 @@ function App() {
       settings=${db.settings}
       setSettings=${setSettings}
       onGrade=${grade(rep.id, 'review')}
-      onExit=${() => go('home')}
-      onEdit=${at => setView({ name: 'edit', repId: rep.id, at })}
+      onExit=${back}
+      onEdit=${at => setView({ name: 'edit', repId: rep.id, at, backTo: view.backTo })}
+    />`;
+  } else if (view.name === 'rep' && rep) {
+    body = html`<${RepertoireView}
+      db=${db}
+      rep=${rep}
+      train=${train}
+      edit=${(id, focus) => setView({ name: 'edit', repId: id, focus, backTo: here })}
+      scrim=${id => setView({ name: 'scrim', repId: id, backTo: here })}
+      compare=${r => {
+        setSettings({ compare: { ...db.settings.compare, [r.color]: r.id } });
+        go('compare');
+      }}
+      remove=${() => {
+        removeRepertoire(rep.id);
+        go('home');
+      }}
+      back=${() => go('home')}
     />`;
   } else if (view.name === 'games') {
     body = html`<${GamesView} db=${db} update=${update} />`;
@@ -235,23 +270,27 @@ function App() {
     body = html`<${RepertoiresView}
       db=${db}
       setGoal=${goal => update(cur => ({ activity: { ...cur.activity, goal, updatedAt: Date.now() } }))}
+      setSettings=${setSettings}
       addRepertoire=${addRepertoire}
       newRepertoire=${newRepertoire}
-      removeRepertoire=${removeRepertoire}
       train=${train}
-      edit=${repId => setView({ name: 'edit', repId })}
-      scrim=${repId => setView({ name: 'scrim', repId })}
+      open=${repId => setView({ name: 'rep', repId })}
     />`;
   }
 
-  const isHome = n => n === 'home' || n === 'train' || n === 'edit' || n === 'scrim';
-  const tab = (name, label) =>
-    html`<button class=${view.name === name || (name === 'home' && isHome(view.name)) ? 'on' : ''} onClick=${() => go(name)}>${label}</button>`;
+  const isHome = ['home', 'rep', 'train', 'edit', 'scrim'].includes(view.name);
+  const inTools = view.name === 'games' || view.name === 'compare';
 
   return html`
     <header class="top">
-      <div class="brand" onClick=${() => go('home')}>♞ Zugtrainer</div>
-      <nav>${tab('home', 'Repertoires')}${tab('games', 'Partien')}${tab('compare', 'Abgleich')}</nav>
+      <div class="brand" onClick=${() => go('home')} title="Modern Chess Trainer"><img src="icons/logo-wordmark-trainer.png" alt="Modern Chess Trainer" /></div>
+      <nav>
+        <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
+        <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
+          <${MenuItem} title="Partien importieren" hint="Deine Partien von Lichess und Chess.com laden" onClick=${() => go('games')} />
+          <${MenuItem} title="Abgleich mit meinen Partien" hint="Wo bist du von deinem Repertoire abgewichen?" onClick=${() => go('compare')} />
+        <//>
+      </nav>
       ${cloudEnabled() &&
       html`<button class=${`acct ${account ? 'in' : ''}`} onClick=${() => setShowAccount(true)} title=${account ? 'Dein Konto' : 'Anmelden, um auf allen Geräten zu lernen'}>
         ${account ? html`<span class=${`dot ${syncStatus}`}></span> Konto` : 'Anmelden'}

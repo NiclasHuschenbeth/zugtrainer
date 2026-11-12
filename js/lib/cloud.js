@@ -66,12 +66,11 @@ export async function onAuthChange(cb) {
 }
 
 /** Schickt den Anmelde-Link. Legt bei der ersten Anmeldung automatisch ein Konto an. */
-export async function sendLoginLink(email) {
+export async function sendLoginLink(email, captchaToken) {
   const c = await getClient();
-  const { error } = await c.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true },
-  });
+  const options = { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true };
+  if (captchaToken) options.captchaToken = captchaToken;
+  const { error } = await c.auth.signInWithOtp({ email, options });
   if (error) throw error;
 }
 

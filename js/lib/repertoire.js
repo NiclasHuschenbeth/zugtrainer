@@ -91,7 +91,9 @@ export function parseRepertoirePgn(pgn) {
     };
     const players = h('White') && h('Black') ? `${h('White')} – ${h('Black')}` : '';
     const name = h('ChapterName') || h('Event') || players || `Kapitel ${chapters.length + 1}`;
-    chapters.push({ name, startFen: makeFen(pos.toSetup()), children });
+    const lesson = h('Lesson');
+    const priority = parseInt(h('Priority'), 10) > 0;
+    chapters.push({ name, startFen: makeFen(pos.toSetup()), children, ...(lesson ? { lesson } : {}), ...(priority ? { priority: true } : {}) });
   }
   return chapters;
 }
@@ -138,6 +140,34 @@ function buildIndex(rep) {
   return index;
 }
 
+// Schlüsselstellung: Kommentar (als Satzanfang) mit diesem Wort, direkt vor dem entscheidenden Zug.
+const KEY_RE = /(^|[.!?]\s+)Schl[üu]e?sselstellung\b/i;
+export const isKeyComment = text => !!text && KEY_RE.test(text);
+/** Text ohne das einleitende "Schlüsselstellung." (für die Anzeige im Quiz). */
+export const stripKey = text => (text || '').replace(/^\s*Schl[üu]e?sselstellung\s*[.:!]?\s*/i, '').trim();
+
+/** Alle Schlüsselstellungen, in denen der Nutzer als Nächstes zieht: Stellung, richtiger Zug, Alternativen. */
+function keyPositionsOf(rep) {
+  const out = [];
+  const seen = new Set();
+  rep.chapters.forEach((ch, ci) => {
+    const walk = nodes => {
+      for (const n of nodes) {
+        if (n.children.length && isKeyComment(n.comment) && turnOf(n.fen) === rep.color) {
+          const id = `K:${epdOf(n.fen)}|${n.children[0].san}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            out.push({ id, chapter: ci, fen: n.fen, lastFrom: n.from, lastTo: n.to, text: stripKey(n.comment), correct: n.children[0], alts: n.children.slice(1) });
+          }
+        }
+        walk(n.children);
+      }
+    };
+    walk(ch.children);
+  });
+  return out;
+}
+
 const cache = new WeakMap();
 /** Abgeleitete Daten (Linien, Index, Karten-Schlüssel), pro Repertoire gecacht. */
 export function derived(rep) {
@@ -162,7 +192,7 @@ export function derived(rep) {
         }
       }
     }
-    d = { lines, index: buildIndex(rep), keys, chapterKeys, mainKeys, chapterMainKeys, chapterLines };
+    d = { lines, index: buildIndex(rep), keys, chapterKeys, mainKeys, chapterMainKeys, chapterLines, keyPositions: keyPositionsOf(rep) };
     cache.set(rep, d);
   }
   return d;

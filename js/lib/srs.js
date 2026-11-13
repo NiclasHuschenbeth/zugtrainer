@@ -42,18 +42,69 @@ export function gradeCard(card, ok, mode, now = Date.now()) {
   return { level, due: now + INTERVALS[level], lapses: prev.lapses + (ok ? 0 : 1), at: now };
 }
 
-export function repStats(rep, progress, alts = false, now = Date.now()) {
+// Lernauswahl: 'all' | 'prio' | 'lesson:<Name>' -> Menge der Kapitel-Nummern (null = alle)
+export const hasPriority = rep => rep.chapters.some(c => c.priority);
+export const lessonsOf = rep => [...new Set(rep.chapters.map(c => c.lesson).filter(Boolean))];
+export const scopeOf = (settings, rep) => (settings.scopes && settings.scopes[rep.id]) || 'all';
+export function scopeChapters(rep, scope) {
+  if (!scope || scope === 'all') return null;
+  const set = new Set();
+  rep.chapters.forEach((c, i) => {
+    if (scope === 'prio' ? c.priority : scope.startsWith('lesson:') && c.lesson === scope.slice(7)) set.add(i);
+  });
+  return set.size ? set : null;
+}
+
+/** Schlüsselstellungen im gewählten Bereich: Anzahl, fällige und neue. */
+export function keyStats(rep, progress, scope = null, now = Date.now()) {
+  const sc = scopeChapters(rep, scope);
+  const list = derived(rep).keyPositions.filter(k => !sc || sc.has(k.chapter));
+  let due = 0;
+  let fresh = 0;
+  for (const k of list) {
+    const c = progress[k.id];
+    if (!c) fresh++;
+    else if (c.due <= now) due++;
+  }
+  return { total: list.length, due, fresh };
+}
+
+/** Aufgaben einer Schlüsselstellungen-Sitzung: erst fällige, dann neue (Prioritäten zuerst). */
+export function buildKeyTasks(rep, progress, opts = {}) {
+  const { scope = null, size = 10, shuffle = false, now = Date.now() } = opts;
+  const sc = scopeChapters(rep, scope);
+  const list = derived(rep).keyPositions.filter(k => !sc || sc.has(k.chapter));
+  const due = list.filter(k => progress[k.id] && progress[k.id].due <= now).sort((a, b) => progress[a.id].due - progress[b.id].due);
+  let fresh = list.filter(k => !progress[k.id]);
+  if (hasPriority(rep) && scope !== 'order') {
+    fresh = fresh.map((k, n) => ({ k, n })).sort((a, b) => (rep.chapters[a.k.chapter].priority ? 0 : 1) - (rep.chapters[b.k.chapter].priority ? 0 : 1) || a.n - b.n).map(x => x.k);
+  }
+  let pick = [...due, ...fresh];
+  if (size > 0) pick = pick.slice(0, size);
+  if (shuffle) {
+    for (let i = pick.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pick[i], pick[j]] = [pick[j], pick[i]];
+    }
+  }
+  return pick;
+}
+
+export function repStats(rep, progress, alts = false, scope = null, now = Date.now()) {
   const d = derived(rep);
   const keys = alts ? d.keys : d.mainKeys;
   const chapterKeys = alts ? d.chapterKeys : d.chapterMainKeys;
+  const sc = scopeChapters(rep, scope);
+  const dueKeys = sc ? new Set([...sc].flatMap(i => [...chapterKeys[i]])) : keys;
   let learned = 0;
   let due = 0;
   for (const k of keys) {
     const c = progress[k];
-    if (c) {
-      learned++;
-      if (c.due <= now) due++;
-    }
+    if (c) learned++;
+  }
+  for (const k of dueKeys) {
+    const c = progress[k];
+    if (c && c.due <= now) due++;
   }
   const chapters = rep.chapters.map((ch, i) => {
     let l = 0;
@@ -70,9 +121,11 @@ const moveNo = (line, i) => parseInt((i ? line.nodes[i - 1].fen : line.startFen)
 const inDepth = (line, i, depth) => !depth || moveNo(line, i) <= depth;
 
 /** Anzahl neuer Züge, die bei dieser Tiefe (bis Zug N, 0 = alle) noch zu lernen sind. */
-export function freshCount(rep, progress, depth = 0, alts = false) {
+export function freshCount(rep, progress, depth = 0, alts = false, scope = null) {
   const seen = new Set();
+  const sc = scopeChapters(rep, scope);
   for (const line of derived(rep).lines) {
+    if (sc && !sc.has(line.chapter)) continue;
     line.keys.forEach((k, i) => {
       if (k && !progress[k] && inDepth(line, i, depth) && (alts || !line.alt[i])) seen.add(k);
     });
@@ -125,9 +178,18 @@ export function buildTasks(rep, progress, mode, opts = {}) {
       .map(x => x.l);
   }
 
+  // Prioritäts-Kapitel zuerst (sonst bleibt die bisherige Reihenfolge)
+  if (hasPriority(rep) && opts.scope !== 'order') {
+    ordered = ordered
+      .map((l, n) => ({ l, n }))
+      .sort((a, b) => (rep.chapters[a.l.chapter].priority ? 0 : 1) - (rep.chapters[b.l.chapter].priority ? 0 : 1) || a.n - b.n)
+      .map(x => x.l);
+  }
+  const sc = scopeChapters(rep, opts.scope);
   const limit = mode === 'learn' ? opts.limit || 5 : Infinity;
   for (const line of ordered) {
     if (opts.chapter != null && line.chapter !== opts.chapter) continue;
+    if (sc && !sc.has(line.chapter)) continue;
     const ask = [];
     line.keys.forEach((k, i) => {
       if (!k || seen.has(k)) return;

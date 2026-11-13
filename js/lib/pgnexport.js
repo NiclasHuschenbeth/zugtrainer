@@ -50,6 +50,8 @@ export function toPgn(rep) {
   return rep.chapters
     .map(ch => {
       const headers = [`[Event "${ch.name.replace(/"/g, "'")}"]`];
+      if (ch.lesson) headers.push(`[Lesson "${ch.lesson.replace(/"/g, "'")}"]`);
+      if (ch.priority) headers.push('[Priority "1"]');
       if (ch.startFen !== INITIAL_FEN) headers.push('[SetUp "1"]', `[FEN "${ch.startFen}"]`);
       const moves = sequence(ch.children, ch.startFen, true);
       return `${headers.join('\n')}\n\n${moves ? moves + ' ' : ''}*\n`;

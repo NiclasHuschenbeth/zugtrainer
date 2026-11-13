@@ -12,6 +12,8 @@ import { GamesView } from './ui/games.js';
 import { CompareView } from './ui/compare.js';
 import { Editor } from './ui/editor.js';
 import { Scrim } from './ui/scrim.js';
+import { setBoardPrefs } from './ui/board.js';
+import { BoardSettings } from './ui/boardsettings.js';
 import { CONFIG } from './config.js';
 import { AccountDialog } from './ui/account.js';
 import { cloudEnabled, currentSession, deleteAccount, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
@@ -34,6 +36,15 @@ function App() {
   const accountRef = useRef(null);
   const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | error | offline
   const [showAccount, setShowAccount] = useState(false);
+  const [showBoard, setShowBoard] = useState(false);
+  // Brett-Einstellungen auf die ganze Seite anwenden (Farben und Größe über CSS, Verhalten über board.js)
+  const st = db && db.settings;
+  useEffect(() => {
+    if (!st) return;
+    document.documentElement.dataset.board = st.boardTheme || 'modern';
+    document.documentElement.dataset.bsize = String(st.boardSize || 3);
+    setBoardPrefs({ showDests: st.showDests !== false, anim: st.anim !== false, input: st.moveInput || 'both' });
+  }, [st && st.boardTheme, st && st.boardSize, st && st.showDests, st && st.anim, st && st.moveInput]);
   const syncing = useRef(false);
   const again = useRef(false);
   const timer = useRef(null);
@@ -311,11 +322,15 @@ function App() {
           <${MenuItem} title="Meine Partien auswerten" hint="Partien von Lichess und Chess.com laden und mit dem Repertoire abgleichen" onClick=${() => go('compare')} />
         <//>
       </nav>
-      ${cloudEnabled() &&
-      html`<button class=${`acct ${account ? 'in' : ''}`} onClick=${() => setShowAccount(true)} title=${account ? 'Dein Konto' : 'Anmelden, um auf allen Geräten zu lernen'}>
-        ${account ? html`<span class=${`dot ${syncStatus}`}></span> Konto` : 'Anmelden'}
-      </button>`}
+      <div class="top-right">
+        <button class="acct gear" onClick=${() => setShowBoard(true)} title="Brett-Einstellungen: Farben, Größe, Zugeingabe" aria-label="Brett-Einstellungen">⚙ Brett</button>
+        ${cloudEnabled() &&
+        html`<button class=${`acct ${account ? 'in' : ''}`} onClick=${() => setShowAccount(true)} title=${account ? 'Dein Konto' : 'Anmelden, um auf allen Geräten zu lernen'}>
+          ${account ? html`<span class=${`dot ${syncStatus}`}></span> Konto` : 'Anmelden'}
+        </button>`}
+      </div>
     </header>
+    ${showBoard && html`<${BoardSettings} settings=${db.settings} setSettings=${setSettings} onClose=${() => setShowBoard(false)} />`}
     ${showAccount &&
     html`<${AccountDialog}
       account=${account}

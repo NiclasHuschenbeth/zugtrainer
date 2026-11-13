@@ -436,3 +436,13 @@ label.check.small { font-size: .85rem; }
 .wdl-bar .d { background: #9AA6B8; }
 .wdl-bar .l { background: var(--bad); }
 @media (max-width: 520px) { .wdl-bar { width: 56px; } }
+
+/* Lektionen, Priorität, Lernauswahl */
+.scope { display: flex; flex-direction: column; gap: .3rem; margin-top: .9rem; font-size: .85rem; font-weight: 700; color: var(--muted); }
+.scope select { width: 100%; font: inherit; font-weight: 600; color: var(--text); }
+.lesson-head { display: flex; flex-direction: column; gap: .1rem; font-weight: 800; padding: 1rem 0 .3rem; border-bottom: 2px solid var(--line); color: var(--primary); }
+.lesson-head:first-child { padding-top: .2rem; }
+.prio { color: var(--accent); }
+
+.keys-box { margin-top: 1rem; padding: .9rem 1rem; background: var(--panel2); border-radius: 12px; display: flex; flex-direction: column; gap: .6rem; }
+.keys-box select { margin-left: .4rem; font: inherit; }

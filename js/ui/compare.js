@@ -2,7 +2,7 @@ import { html, useMemo, useState } from 'preact';
 import { de } from '../lib/repertoire.js';
 import { compare } from '../lib/analysis.js';
 import { outcomeFor } from '../lib/games.js';
-import { derived, epdOf, moveLabel } from '../lib/repertoire.js';
+import { derived, epdOf, moveLabel, moveText } from '../lib/repertoire.js';
 import { Board } from './board.js';
 import { GamesView } from './games.js';
 import { StatsView } from './stats.js';
@@ -144,7 +144,7 @@ export function CompareView({ db, go, train, setSettings, update }) {
                   ${list.map(e => html`<button class=${`item ${current.key === e.key ? 'on' : ''}`} onClick=${() => setSel(e.key)}>
                     <span class="count">${e.rows.length}×</span>
                     <span class="grow">
-                      <b>${moveLabel(e.fen)} ${de(e.played)}</b>
+                      <b>${moveText(e.fen, e.played)}</b>
                       <span class="muted"> ${tab === 'you' ? 'statt' : '– im Repertoire nur'} ${sans(e.expected)}</span>
                     </span>
                     <span class="wdl"><i class="w">${e.w}</i><i class="d">${e.d}</i><i class="l">${e.l}</i></span>
@@ -187,9 +187,9 @@ function Detail({ e, rep, train }) {
 function verdict(res) {
   switch (res.type) {
     case 'you':
-      return html`<span class="bad">Du: ${moveLabel(res.fen)} ${de(res.played)}</span> <span class="muted">statt ${sans(res.expected)}</span>`;
+      return html`<span class="bad">Du: ${moveText(res.fen, res.played)}</span> <span class="muted">statt ${sans(res.expected)}</span>`;
     case 'opponent':
-      return html`<span class="warn">Gegner: ${moveLabel(res.fen)} ${de(res.played)}</span> <span class="muted">nicht im Repertoire</span>`;
+      return html`<span class="warn">Gegner: ${moveText(res.fen, res.played)}</span> <span class="muted">nicht im Repertoire</span>`;
     case 'end':
       return html`<span class="ok">Repertoire bis zum Ende gefolgt</span> <span class="muted">(${Math.ceil(res.ply / 2)} Züge)</span>`;
     case 'complete':

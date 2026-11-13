@@ -2,21 +2,24 @@ import { html, useMemo, useRef, useState } from 'preact';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
 import { parseSquare } from 'chessops/util.js';
-import { de, moveLabel, posFromFen, turnOf } from '../lib/repertoire.js';
-import { buildKeyTasks, scopeOf } from '../lib/srs.js';
+import { moveText, posFromFen, turnOf } from '../lib/repertoire.js';
+import { buildKeyTasks, keyScopeOf } from '../lib/srs.js';
 import { Board } from './board.js';
 
 /**
  * Schlüsselstellungen üben: Stellung zeigen, Nutzer spielt den richtigen Zug.
- * Richtig: Erklärung (Kommentar des Zuges). Falsch: Lösung und Erklärung.
+ * Falscher Zug: noch einmal versuchen (zählt als Fehler). Richtig: Erklärung zur Stellung.
  * Wiederholungsplan wie bei den Linien, aber als eigene Karten (Schlüssel "K:…").
+ * Am Ende: verpasste Stellungen gezielt nochmal üben (ohne neue Bewertung).
  */
 export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onExit, onMore }) {
-  const tasks = useMemo(
-    () => buildKeyTasks(rep, progress, { scope: scopeOf(settings, rep), size: settings.keySize ?? 10, shuffle: settings.keyShuffle !== false }),
+  const first = useMemo(
+    () => buildKeyTasks(rep, progress, { scope: keyScopeOf(settings, rep), size: 0, shuffle: settings.keyShuffle !== false }),
     [],
   );
   const cgRef = useRef(null);
+  const [tasks, setTasks] = useState(first);
+  const [retry, setRetry] = useState(false); // Fehler-Wiederholung: keine neue Bewertung
   const [i, setI] = useState(0);
   const [state, setState] = useState({ phase: 'ask', hinted: false, failed: false, msg: null });
   const [stats, setStats] = useState({ ok: 0, bad: 0 });
@@ -24,6 +27,7 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
   const finished = i >= tasks.length;
   const task = tasks[Math.min(i, tasks.length - 1)];
   const graded = useRef(false);
+  const lesson = task && rep.chapters[task.chapter].lesson;
 
   const show = (t, movable) => {
     const cg = cgRef.current;
@@ -47,22 +51,20 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
   const grade = ok => {
     if (graded.current) return;
     graded.current = true;
-    onGrade(task.id, ok);
+    if (!retry) onGrade(task.id, ok);
     setStats(s => ({ ok: s.ok + (ok ? 1 : 0), bad: s.bad + (ok ? 0 : 1) }));
-    if (!ok) setMissed(m => [...m, task]);
+    if (!ok && !retry) setMissed(m => [...m, task]);
   };
 
-  const reveal = (ok, text) => {
+  // Erklärung: Lösungstext aus dem Kurs, sonst der Kommentar zum richtigen Zug
+  const explain = () => task.solution || task.correct.comment || '';
+
+  const reveal = (ok, msg) => {
     const cg = cgRef.current;
     const c = task.correct;
-    cg.set({
-      fen: c.fen,
-      turnColor: turnOf(c.fen),
-      lastMove: [c.from, c.to],
-      movable: { color: undefined, dests: new Map() },
-    });
+    cg.set({ fen: c.fen, turnColor: turnOf(c.fen), lastMove: [c.from, c.to], movable: { color: undefined, dests: new Map() } });
     cg.setAutoShapes(ok ? [] : [{ orig: c.from, dest: c.to, brush: 'green' }]);
-    setState(s => ({ ...s, phase: ok ? 'right' : 'wrong', msg: text }));
+    setState(s => ({ ...s, phase: ok ? 'right' : 'wrong', msg }));
   };
 
   const onMove = (orig, dest) => {
@@ -75,27 +77,24 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
       move.promotion = c.promotion && c.from === orig && c.to === dest ? c.promotion : 'queen';
     }
     const san = makeSan(pos, move);
+    const label = moveText(task.fen, san);
     if (san === task.correct.san) {
-      const clean = !state.hinted && !state.failed;
-      grade(clean);
-      reveal(true, { kind: 'ok', head: `${de(san)} – richtig!`, text: task.correct.comment });
+      grade(!state.hinted && !state.failed);
+      reveal(true, { kind: 'ok', head: `${label} – richtig!`, text: explain() });
       return;
     }
     const alt = task.alts.find(a => a.san === san);
     if (alt) {
-      setState(s => ({ ...s, msg: { kind: 'info', head: `${de(san)} steht auch im Repertoire – hier ist aber ein anderer Zug gesucht.`, text: '' } }));
-      setTimeout(() => show(task, true), 350);
-      return;
+      setState(s => ({ ...s, msg: { kind: 'info', head: `${label} steht auch im Repertoire – hier ist aber ein anderer Zug gesucht.`, text: '' } }));
+    } else {
+      // falsch: Fehler zählen, aber noch einmal versuchen lassen
+      setState(s => ({
+        ...s,
+        failed: true,
+        msg: { kind: 'bad', head: `${label} ist nicht der gesuchte Zug.`, text: alt && alt.comment ? alt.comment : '' },
+      }));
     }
-    // falsch: Lösung zeigen
-    grade(false);
-    setState(s => ({ ...s, failed: true }));
-    reveal(false, {
-      kind: 'bad',
-      head: `Leider falsch. Gesucht war ${moveLabel(task.fen)} ${de(task.correct.san)}.`,
-      text: task.correct.comment,
-      extra: alt ? alt.comment : '',
-    });
+    setTimeout(() => show(task, true), 450);
   };
 
   const hint = () => {
@@ -107,7 +106,7 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
   const solve = () => {
     if (state.phase !== 'ask') return;
     grade(false);
-    reveal(false, { kind: 'info', head: `Lösung: ${moveLabel(task.fen)} ${de(task.correct.san)}`, text: task.correct.comment });
+    reveal(false, { kind: 'info', head: `Lösung: ${moveText(task.fen, task.correct.san)}`, text: explain() });
   };
 
   const next = () => {
@@ -118,6 +117,17 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
     if (n < tasks.length) show(tasks[n], true);
   };
 
+  const redoMissed = () => {
+    graded.current = false;
+    setTasks(missed);
+    setRetry(true);
+    setMissed([]);
+    setStats({ ok: 0, bad: 0 });
+    setI(0);
+    setState({ phase: 'ask', hinted: false, failed: false, msg: null });
+    setTimeout(() => show(missed[0], true), 50);
+  };
+
   if (!tasks.length) {
     return html`<div class="card center">
       <h2>Schlüsselstellungen: ${rep.name}</h2>
@@ -126,7 +136,7 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
     </div>`;
   }
 
-  const pct = tasks.length ? ((finished ? tasks.length : i + (state.phase === 'ask' ? 0 : 1)) / tasks.length) * 100 : 0;
+  const pct = ((finished ? tasks.length : i + (state.phase === 'ask' ? 0 : 1)) / tasks.length) * 100;
   const total = stats.ok + stats.bad;
 
   return html`<div class="trainer">
@@ -136,8 +146,9 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
     <div class="trainer-side card">
       <div class="trainer-head">
         <div>
-          <div class="eyebrow">Schlüsselstellungen · ${rep.name}</div>
-          <h2>${finished ? 'Geschafft' : rep.chapters[task.chapter].name}</h2>
+          <div class="eyebrow">Schlüsselstellungen${retry ? ' · Fehler nochmal' : ''} · ${rep.name}</div>
+          <h2>${finished ? 'Geschafft' : lesson || rep.chapters[task.chapter].name}</h2>
+          ${!finished && lesson && html`<div class="muted small">${rep.chapters[task.chapter].name}</div>`}
         </div>
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>
@@ -153,9 +164,10 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
                 <div><b class="bad">${stats.bad}</b><span>falsch</span></div>
                 ${total > 0 && html`<div><b>${Math.round((stats.ok / total) * 100)} %</b><span>von ${total} Stellungen</span></div>`}
               </div>
-              ${missed.length > 0 && html`<div class="small muted">Das hast du verpasst: ${missed.map(m => `${moveLabel(m.fen)} ${de(m.correct.san)}`).join(' · ')}</div>`}
+              ${missed.length > 0 && html`<div class="small muted">Das hast du verpasst: ${missed.map(m => moveText(m.fen, m.correct.san)).join(' · ')}</div>`}
             </div>
             <div class="row">
+              ${missed.length > 0 && html`<button class="btn accent" onClick=${redoMissed}>Fehler nochmal üben (${missed.length})</button>`}
               <button class="btn primary" onClick=${onMore}>Weitere Stellungen</button>
               <button class="btn" onClick=${onExit}>Zurück zur Übersicht</button>
             </div>
@@ -166,7 +178,6 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
               ${state.msg && html`<div class=${`msg ${state.msg.kind}`}>
                 <div><b>${state.msg.head}</b></div>
                 ${state.msg.text && html`<p>${state.msg.text}</p>`}
-                ${state.msg.extra && html`<p class="muted">${state.msg.extra}</p>`}
               </div>`}
             </div>
             <div class="row trainer-actions">

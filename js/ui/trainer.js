@@ -3,7 +3,7 @@ import { de } from '../lib/repertoire.js';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
 import { parseSquare } from 'chessops/util.js';
-import { derived, epdOf, moveLabel, posFromFen, turnOf } from '../lib/repertoire.js';
+import { derived, epdOf, moveLabel, moveText, posFromFen, turnOf } from '../lib/repertoire.js';
 import { buildTasks, scopeOf } from '../lib/srs.js';
 import { sounds } from '../lib/sound.js';
 import { Board } from './board.js';
@@ -154,7 +154,7 @@ class Engine {
 
     if (san === node.san) {
       if (this.phase === 'quiz' && !this.errors.has(i)) this.stats.ok++;
-      this.message = { kind: 'ok', text: `${de(san)} – richtig!` };
+      this.message = { kind: 'ok', text: `${moveText(fen, san)} – richtig!` };
       this.sound('ok');
       this.playNode(i);
       this.i++;
@@ -166,9 +166,9 @@ class Engine {
     const known = this.index.get(epdOf(fen));
     const alt = known && known.has(san);
     if (alt) {
-      this.message = { kind: 'info', text: `${de(san)} steht auch im Repertoire – hier ist aber ein anderer Zug gesucht.` };
+      this.message = { kind: 'info', text: `${moveText(fen, san)} steht auch im Repertoire – hier ist aber ein anderer Zug gesucht.` };
     } else {
-      this.message = { kind: 'bad', text: `${de(san)} ist nicht der Repertoirezug.` };
+      this.message = { kind: 'bad', text: `${moveText(fen, san)} ist nicht der Repertoirezug.` };
       this.sound('bad');
       if (this.phase === 'quiz') this.markError();
     }
@@ -205,7 +205,7 @@ class Engine {
     this.markError();
     this.waiting = false;
     const n = this.line.nodes[this.i];
-    this.message = { kind: 'info', text: `Lösung: ${moveLabel(this.fenBefore(this.i))} ${de(n.san)}` };
+    this.message = { kind: 'info', text: `Lösung: ${moveText(this.fenBefore(this.i), n.san)}` };
     this.playNode(this.i);
     this.cg.setAutoShapes(n.shapes || []);
     this.i++;
@@ -373,7 +373,7 @@ function Result({ e }) {
       <ul class="missed">
         ${missed.map(m => {
           const before = m.i ? m.line.nodes[m.i - 1].fen : m.line.startFen;
-          return html`<li>${moveLabel(before)} <b>${de(m.line.nodes[m.i].san)}</b></li>`;
+          return html`<li><b>${moveText(before, m.line.nodes[m.i].san)}</b></li>`;
         })}
       </ul>
     </div>`}
@@ -390,7 +390,7 @@ function Status({ e, rep }) {
   } else if (e.waiting && e.phase === 'teach') {
     const n = e.line.nodes[e.i];
     prompt = html`<div class="msg teach">
-      <div>Neuer Zug: spiele <b>${moveLabel(e.fenBefore(e.i))} ${de(n.san)}${n.glyph || ''}</b></div>
+      <div>Neuer Zug: spiele <b>${moveText(e.fenBefore(e.i), n.san)}${n.glyph || ''}</b></div>
       ${n.comment && html`<p>${n.comment}</p>`}
     </div>`;
   } else if (e.waiting) {

@@ -1,6 +1,6 @@
 import { html, useState } from 'preact';
 import { derived, parseRepertoirePgn } from '../lib/repertoire.js';
-import { dayKey, freshCount, hasPriority, keyStats, lastDays, lessonsOf, repStats, scopeOf, streakOf } from '../lib/srs.js';
+import { dayKey, freshCount, hasPriority, keyScopeOf, keyStats, lastDays, lessonsOf, repStats, scopeOf, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
@@ -124,14 +124,22 @@ function RepTile({ rep, progress, open, alts }) {
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
 export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compare, remove, back }) {
   const scope = scopeOf(db.settings, rep);
+  const lessons = lessonsOf(rep);
+  const prio = hasPriority(rep);
   const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts, scope);
   const depth = db.settings.depth || 0;
   const dd = derived(rep);
   const hasAlts = dd.mainKeys.size < dd.keys.size;
   const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope);
-  const ks = keyStats(rep, db.progress[rep.id] || {}, scope);
-  const lessons = lessonsOf(rep);
-  const prio = hasPriority(rep);
+  const keyScope = keyScopeOf(db.settings, rep);
+  const kProg = db.progress[rep.id] || {};
+  const ks = keyStats(rep, kProg, keyScope);
+  const keyOptions = [
+    { v: 'all', t: 'Alle Lektionen (gemischt)', n: keyStats(rep, kProg, null) },
+    ...(prio ? [{ v: 'prio', t: 'Nur Prioritäten ★', n: keyStats(rep, kProg, 'prio') }] : []),
+    ...lessons.map(l => ({ v: `lesson:${l}`, t: l, n: keyStats(rep, kProg, `lesson:${l}`) })),
+  ].filter(o => o.v === 'all' || o.n.total > 0);
+  const setKeyScope = v => setSettings({ keyScopes: { ...(db.settings.keyScopes || {}), [rep.id]: v } });
   const chapters = s.chapters.map((c, i) => ({ ...c, i, lesson: rep.chapters[i].lesson || '', priority: !!rep.chapters[i].priority }));
   const groups = lessons.length
     ? [...lessons, ''].map(name => ({ name, items: chapters.filter(c => c.lesson === name) })).filter(g => g.items.length)
@@ -177,13 +185,13 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
         <div class="row between top-align">
           <div>
             <b>Schlüsselstellungen</b>
-            <div class="muted small">${ks.total} im Kurs · ${ks.due} fällig · ${ks.fresh} neu</div>
+            <div class="muted small">${ks.total} in der Auswahl · ${ks.due} fällig · ${ks.fresh} neu</div>
           </div>
           <button class="btn primary" disabled=${ks.due + ks.fresh === 0} onClick=${() => train(rep.id, 'keys')}>Üben</button>
         </div>
-        <label class="small muted">Stellungen pro Sitzung
-          <select value=${db.settings.keySize ?? 10} onChange=${ev => setSettings({ keySize: +ev.target.value })}>
-            ${[5, 10, 20, 0].map(n => html`<option value=${n}>${n || 'Alle'}</option>`)}
+        <label class="small muted">Auswahl
+          <select value=${keyScope} onChange=${ev => setKeyScope(ev.target.value)}>
+            ${keyOptions.map(o => html`<option value=${o.v}>${o.t} (${o.n.total})</option>`)}
           </select>
         </label>
       </div>`}

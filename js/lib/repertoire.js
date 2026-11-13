@@ -70,13 +70,6 @@ function build(pgnNode, pos) {
     if (move.promotion) node.promotion = move.promotion;
     if (comment) node.comment = comment;
     if (shapes.length) node.shapes = shapes;
-    if (comment && isKeyComment(comment)) {
-      const cut = /\s*Lösung:\s*/.exec(comment);
-      if (cut) {
-        node.solution = comment.slice(cut.index + cut[0].length).trim();
-        node.comment = comment.slice(0, cut.index).trim();
-      }
-    }
     const glyph = (child.data.nags || []).map(n => NAGS[n]).find(Boolean);
     if (glyph) node.glyph = glyph;
     const posGlyph = (child.data.nags || []).map(n => POS_NAGS[n]).find(Boolean);
@@ -164,19 +157,21 @@ function keyPositionsOf(rep) {
   const out = [];
   const seen = new Set();
   rep.chapters.forEach((ch, ci) => {
-    const walk = nodes => {
+    // Lösungstexte liegen getrennt von der PGN: rep.keySolutions["<Kapitel>:<Halbzug>:<Zug>"]
+    const walk = (nodes, depth) => {
       for (const n of nodes) {
         if (n.children.length && isKeyComment(n.comment) && turnOf(n.fen) === rep.color) {
           const id = `K:${epdOf(n.fen)}|${n.children[0].san}`;
           if (!seen.has(id)) {
             seen.add(id);
-            out.push({ id, chapter: ci, fen: n.fen, lastFrom: n.from, lastTo: n.to, text: stripKey(n.comment), solution: n.solution || '', correct: n.children[0], alts: n.children.slice(1) });
+            const solution = (rep.keySolutions && rep.keySolutions[`${ci + 1}:${depth + 1}:${n.children[0].san.replace(/[+#!?]/g, '')}`]) || '';
+            out.push({ id, chapter: ci, fen: n.fen, lastFrom: n.from, lastTo: n.to, text: stripKey(n.comment), solution, correct: n.children[0], alts: n.children.slice(1) });
           }
         }
-        walk(n.children);
+        walk(n.children, depth + 1);
       }
     };
-    walk(ch.children);
+    walk(ch.children, 0);
   });
   return out;
 }

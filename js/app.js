@@ -16,7 +16,8 @@ import { setBoardPrefs } from './ui/board.js';
 import { BoardSettings } from './ui/boardsettings.js';
 import { CONFIG } from './config.js';
 import { AccountDialog } from './ui/account.js';
-import { cloudEnabled, currentSession, deleteAccount, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
+import { cloudEnabled, currentSession, deleteAccount, fetchCourses, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
+import { parseRepertoirePgn } from './lib/repertoire.js';
 import { emptySync, runSync } from './lib/sync.js';
 
 const SYNC_KEYS = ['repertoires', 'progress', 'activity', 'settings', 'sync'];
@@ -65,6 +66,33 @@ function App() {
     timer.current = setTimeout(doSync, ms);
   };
 
+  /** Freigeschaltete Kurse (Ablefy) einmalig als Repertoire anlegen. Wer ein Repertoire löscht, bekommt es nicht erneut (settings.coursesSeen). */
+  const preloadCourses = async () => {
+    try {
+      const rows = await fetchCourses();
+      const cur = dbRef.current;
+      const seen = { ...(cur.settings.coursesSeen || {}) };
+      const have = new Set(cur.repertoires.map(r => r.id));
+      const add = [];
+      let changed = false;
+      for (const row of rows) {
+        if (seen[row.id]) continue;
+        seen[row.id] = row.version || 1;
+        changed = true;
+        const id = 'course-' + row.id;
+        if (have.has(id)) continue;
+        const chapters = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
+        if (!chapters.length) continue;
+        const ks = row.key_solutions && Object.keys(row.key_solutions).length ? { keySolutions: row.key_solutions } : {};
+        add.push({ id, name: row.name, color: row.color, chapters, ...ks, createdAt: Date.now(), updatedAt: Date.now() });
+      }
+      if (!changed) return;
+      update(c => ({ repertoires: [...c.repertoires, ...add], settings: { ...c.settings, coursesSeen: seen, updatedAt: Date.now() } }));
+    } catch (err) {
+      console.warn('Kurse konnten nicht geladen werden', err);
+    }
+  };
+
   /** Gleicht mit dem Konto ab. -> true bei Erfolg */
   const doSync = async () => {
     const acc = accountRef.current;
@@ -85,6 +113,7 @@ function App() {
       await runSync({ getDb: () => dbRef.current, update: fn => update(fn, { fromSync: true }), remote, userId: acc.userId });
       setSyncStatus('idle');
       ok = true;
+      await preloadCourses();
     } catch (err) {
       console.error('Abgleich fehlgeschlagen', err);
       setSyncStatus('error');

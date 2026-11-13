@@ -7,6 +7,7 @@ import { finishLogin } from './lib/lichess.js';
 import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
 import { Menu, MenuItem } from './ui/menu.js';
 import { Trainer } from './ui/trainer.js';
+import { KeyTrainer } from './ui/keypos.js';
 import { GamesView } from './ui/games.js';
 import { CompareView } from './ui/compare.js';
 import { Editor } from './ui/editor.js';
@@ -217,7 +218,18 @@ function App() {
 
   const rep = view.repId ? db.repertoires.find(r => r.id === view.repId) : null;
   let body;
-  if (view.name === 'train' && rep) {
+  if (view.name === 'train' && rep && view.mode === 'keys') {
+    body = html`<${KeyTrainer}
+      key=${view.nonce}
+      rep=${rep}
+      progress=${db.progress[rep.id] || {}}
+      settings=${db.settings}
+      setSettings=${setSettings}
+      onGrade=${grade(rep.id, 'review')}
+      onExit=${back}
+      onMore=${() => train(rep.id, 'keys', null, null, view.backTo)}
+    />`;
+  } else if (view.name === 'train' && rep) {
     body = html`<${Trainer}
       key=${view.nonce}
       rep=${rep}

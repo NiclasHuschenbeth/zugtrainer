@@ -268,7 +268,7 @@ function App() {
   } else if (view.name === 'games') {
     body = html`<${GamesView} db=${db} update=${update} />`;
   } else if (view.name === 'compare') {
-    body = html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} />`;
+    body = html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} />`;
   } else {
     body = html`<${RepertoiresView}
       db=${db}
@@ -290,8 +290,7 @@ function App() {
       <nav>
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
         <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
-          <${MenuItem} title="Partien importieren" hint="Deine Partien von Lichess und Chess.com laden" onClick=${() => go('games')} />
-          <${MenuItem} title="Abgleich mit meinen Partien" hint="Wo bist du von deinem Repertoire abgewichen?" onClick=${() => go('compare')} />
+          <${MenuItem} title="Meine Partien auswerten" hint="Partien von Lichess und Chess.com laden und mit dem Repertoire abgleichen" onClick=${() => go('compare')} />
         <//>
       </nav>
       ${cloudEnabled() &&

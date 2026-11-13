@@ -412,3 +412,10 @@ label.check.small { font-size: .85rem; }
 .missed { margin: .3rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; max-height: 9rem; overflow: auto; }
 .missed li { background: var(--bg); border-radius: 8px; padding: .2rem .6rem; font-size: .9rem; }
 .alts { margin-top: .5rem; }
+.load-games summary { cursor: pointer; font-weight: 700; color: var(--primary); }
+.load-games[open] summary { margin-bottom: 1rem; }
+.drill select { display: block; margin-top: .6rem; max-width: 100%; }
+@media (max-width: 820px) {
+  .drill { flex-direction: column; align-items: stretch; }
+  .drill .btn { white-space: normal; text-align: center; }
+}

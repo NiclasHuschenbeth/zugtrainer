@@ -2,19 +2,40 @@ import { html, useMemo, useState } from 'preact';
 import { de } from '../lib/repertoire.js';
 import { compare } from '../lib/analysis.js';
 import { outcomeFor } from '../lib/games.js';
-import { epdOf, moveLabel } from '../lib/repertoire.js';
+import { derived, epdOf, moveLabel } from '../lib/repertoire.js';
 import { Board } from './board.js';
+import { GamesView } from './games.js';
 
 const gameLink = (g, ply) => (g.source === 'lichess' ? `${g.url}${g.userColor === 'black' ? '/black' : ''}#${ply}` : g.url);
 const opponent = g => (g.userColor === 'white' ? g.black : g.white);
 const sans = list => list.map(e => de(e.san)).join(' oder ');
 
-// Stellungen der Abweichungen (häufigste zuerst, jede Stellung nur einmal, max. 20)
-const drillKeys = list => [...new Set(list.map(e => `${epdOf(e.fen)}|${e.expected[0].san}`))].slice(0, 20);
+// Stellungen der Abweichungen (häufigste zuerst, jede Stellung nur einmal, max. 20).
+// follow: wie viele eigene Folgezüge in der Repertoire-Linie zusätzlich abgefragt werden.
+const FOLLOW = [[0, 'Nur der Abweichungszug'], [2, '+ 2 Folgezüge'], [4, '+ 4 Folgezüge'], [99, 'Bis zum Linienende']];
+function drillKeys(rep, list, follow = 0) {
+  const base = [...new Set(list.map(e => `${epdOf(e.fen)}|${e.expected[0].san}`))].slice(0, 20);
+  if (!follow) return base;
+  const { lines } = derived(rep);
+  const out = new Set();
+  for (const key of base) {
+    out.add(key);
+    const line = lines.find(l => l.keys.includes(key));
+    if (!line) continue;
+    let n = 0;
+    for (let i = line.keys.indexOf(key) + 1; i < line.keys.length && n < follow; i++) {
+      if (line.keys[i]) {
+        out.add(line.keys[i]);
+        n++;
+      }
+    }
+  }
+  return [...out];
+}
 
 const COLOR = { white: 'Weiß', black: 'Schwarz' };
 
-export function CompareView({ db, go, train, setSettings }) {
+export function CompareView({ db, go, train, setSettings, update }) {
   const s = db.settings;
   // Pro Farbe ein aktives Repertoire (gespeicherte Wahl, sonst das erste dieser Farbe)
   const active = color => {
@@ -33,14 +54,18 @@ export function CompareView({ db, go, train, setSettings }) {
     setSel(null);
   };
 
-  if (!db.repertoires.length || !db.games.length) {
+  if (!db.repertoires.length) {
     return html`<div class="card center">
-      <h2>Abgleich mit deinen Partien</h2>
-      <p class="muted">Dafür brauchst du mindestens ein Repertoire und importierte Partien.</p>
-      <div class="row center">
-        ${!db.repertoires.length && html`<button class="btn primary" onClick=${() => go('home')}>Repertoire hochladen</button>`}
-        ${!db.games.length && html`<button class="btn primary" onClick=${() => go('games')}>Partien importieren</button>`}
-      </div>
+      <h2>Meine Partien auswerten</h2>
+      <p class="muted">Dafür brauchst du zuerst mindestens ein Repertoire.</p>
+      <div class="row center"><button class="btn primary" onClick=${() => go('home')}>Repertoire hochladen</button></div>
+    </div>`;
+  }
+  if (!db.games.length) {
+    return html`<div class="stack">
+      <h1>Meine Partien auswerten</h1>
+      <p class="muted">Schritt 1: Lade deine Partien. Danach siehst du hier sofort, wo du von deinem Repertoire abgewichen bist und welche Gegnerzüge dir noch fehlen.</p>
+      <${GamesView} db=${db} update=${update} embedded=${true} />
     </div>`;
   }
 
@@ -56,10 +81,14 @@ export function CompareView({ db, go, train, setSettings }) {
     </label>`;
   };
 
-  const head = html`<h1>Abgleich mit deinen Partien</h1>
+  const head = html`<h1>Meine Partien auswerten</h1>
     <p class="muted">Wo bist du in deinen Partien von deinem Repertoire abgewichen, und welche Gegnerzüge fehlen dir noch?</p>
     <p class="muted">Lege fest, welches Repertoire für deine Weiß- und welches für deine Schwarzpartien gilt. Klicke eine Farbe an, um deren Auswertung zu sehen.</p>
-    <div class="grid2">${picker('white')}${picker('black')}</div>`;
+    <div class="grid2">${picker('white')}${picker('black')}</div>
+    <details class="card load-games">
+      <summary>${db.games.length} Partien geladen – weitere laden oder aktualisieren</summary>
+      <${GamesView} db=${db} update=${update} embedded=${true} />
+    </details>`;
 
   if (!rep) {
     return html`<div class="stack">${head}
@@ -97,9 +126,13 @@ export function CompareView({ db, go, train, setSettings }) {
           : !list.length
             ? html`<div class="card center muted">${tab === 'you' ? 'Stark – in diesen Partien bist du nie vom Repertoire abgewichen.' : 'Keine Lücken gefunden.'}</div>`
             : html`${tab === 'you' && html`<div class="row between card drill">
-                  <span>Trainiere genau die Stellungen, in denen du vom Repertoire abgewichen bist – die häufigsten zuerst.</span>
-                  <button class="btn primary" onClick=${() => train(rep.id, 'practice', null, drillKeys(list))}>
-                    Meine Abweichungen trainieren (${drillKeys(list).length} Stellungen)
+                  <span>Trainiere die Stellungen, in denen du vom Repertoire abgewichen bist – die häufigsten zuerst.
+                    <select value=${s.drillFollow || 0} onChange=${e => setSettings({ drillFollow: +e.target.value })} aria-label="Wie viele Züge abfragen">
+                      ${FOLLOW.map(([v, t]) => html`<option value=${v}>${t}</option>`)}
+                    </select>
+                  </span>
+                  <button class="btn primary" onClick=${() => train(rep.id, 'practice', null, drillKeys(rep, list, s.drillFollow || 0))}>
+                    Meine Abweichungen trainieren (${drillKeys(rep, list, s.drillFollow || 0).length} Stellungen)
                   </button>
                 </div>`}
               <div class="compare">

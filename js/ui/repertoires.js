@@ -145,7 +145,7 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
           <${MenuItem} title="Editor" hint="Züge, Varianten und Kommentare bearbeiten" onClick=${() => edit(rep.id)} />
           <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch?" onClick=${() => edit(rep.id, 'coverage')} />
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
-          <${MenuItem} title="Abgleich mit meinen Partien" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
+          <${MenuItem} title="Meine Partien auswerten" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
           <${MenuDivider} />
           <${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />
         <//>

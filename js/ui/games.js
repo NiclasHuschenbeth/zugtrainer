@@ -6,10 +6,10 @@ const SOURCES = {
   chesscom: { title: 'Chess.com', fetch: fetchChessCom, placeholder: 'Chess.com-Benutzername' },
 };
 
-export function GamesView({ db, update }) {
+export function GamesView({ db, update, embedded }) {
   const n = src => db.games.filter(g => g.source === src).length;
   return html`<div class="stack">
-    <h1>Meine Partien</h1>
+    ${!embedded && html`<h1>Meine Partien</h1>`}
     <p class="muted">Gib deinen Benutzernamen ein – die Partien werden über die öffentlichen Schnittstellen von Lichess und Chess.com geladen. Ein Passwort ist nicht nötig, und alles bleibt in deinem Browser.</p>
     <div class="grid2">
       ${Object.keys(SOURCES).map(src => html`<${Importer} key=${src} src=${src} db=${db} update=${update} />`)}
@@ -70,7 +70,7 @@ function Importer({ src, db, update }) {
     </label>
     <label>Anzahl der letzten Partien
       <select value=${max} onChange=${e => setMax(+e.target.value)}>
-        ${[50, 100, 200, 500, 1000].map(v => html`<option value=${v}>${v}</option>`)}
+        ${[50, 100, 200, 500, 1000, 100000].map(v => html`<option value=${v}>${v === 100000 ? 'Alle' : v}</option>`)}
       </select>
     </label>
     <button class="btn primary" type="submit" disabled=${state.busy || !user.trim()}>${state.busy ? 'Lädt …' : 'Partien importieren'}</button>

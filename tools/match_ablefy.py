@@ -81,10 +81,9 @@ def align(chs, les, min_score=0.45):
 def main(lessons_file, slug, outdir, *specs):
     lessons = json.load(io.open(lessons_file, encoding='utf-8'))
     les = [l for l in lessons if not SKIP.search(l['lesson'])]
-    # Module "Einführung"/"Abschluss" enthalten nur Nicht-Kapitel-Lektionen und fallen durch SKIP raus.
+    byid_all = {str(l['id']): l for l in lessons}  # Korrekturen dürfen auch ausgeblendete Lektionen (z. B. "Einführung") wählen
     videos = {}
     fixes = {}
-    byid = {str(l['id']): i for i, l in enumerate(les)}
     for spec in specs:
         if spec.startswith('fix='):
             fixes = json.load(io.open(spec[4:], encoding='utf-8'))
@@ -95,18 +94,24 @@ def main(lessons_file, slug, outdir, *specs):
         pgn = io.open(path, encoding='utf-8-sig').read()
         games, names = chapters_of(pgn)
         al = align(names, les)
+        fixed = {}
         for k, nm in enumerate(names):
             for key, lid in fixes.items():
                 if nm == key or nm.startswith(key):
-                    al[k] = (byid[str(lid)], 1.0)
-        used = {a[0] for a in al if a is not None}
+                    fixed[k] = byid_all[str(lid)]
+        used = {a[0] for k, a in enumerate(al) if a is not None and k not in fixed} | {les.index(l) for l in fixed.values() if l in les}
         unused = [l['lesson'][:75] for i, l in enumerate(les) if i not in used]
         print(f'   unbenutzte Lektionen: {unused}')
         out, last_cat = [], les[0]['cat']
         print(f'== {label}: {len(games)} Kapitel, {sum(a is not None for a in al)} zugeordnet')
         for k, (g, nm, a) in enumerate(zip(games, names, al), 1):
             extra = ''
-            if a is not None:
+            if k - 1 in fixed:
+                l = fixed[k - 1]
+                last_cat = l['cat']
+                videos[nm] = BASE.format(slug=slug, id=l['id'])
+                extra_p = '[Priority "1"]\n' if '(P)' in l['lesson'] else ''
+            elif a is not None:
                 l = les[a[0]]
                 last_cat = l['cat']
                 videos[nm] = BASE.format(slug=slug, id=l['id'])

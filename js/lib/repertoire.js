@@ -16,6 +16,12 @@ export function posFromFen(fen) {
   return Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
 }
 
+/** Zug mit Nummer: "9. De5" (Weiß) bzw. "6...Dh5" (Schwarz, ohne Leerzeichen). */
+export function moveText(fenBefore, san) {
+  const f = fenBefore.split(' ');
+  return f[1] === 'w' ? `${f[5]}. ${de(san)}` : `${f[5]}...${de(san)}`;
+}
+
 /** "12." bzw. "12…" für den Zug, der in dieser Stellung gespielt wird. */
 export function moveLabel(fenBefore) {
   const f = fenBefore.split(' ');
@@ -64,6 +70,13 @@ function build(pgnNode, pos) {
     if (move.promotion) node.promotion = move.promotion;
     if (comment) node.comment = comment;
     if (shapes.length) node.shapes = shapes;
+    if (comment && isKeyComment(comment)) {
+      const cut = /\s*Lösung:\s*/.exec(comment);
+      if (cut) {
+        node.solution = comment.slice(cut.index + cut[0].length).trim();
+        node.comment = comment.slice(0, cut.index).trim();
+      }
+    }
     const glyph = (child.data.nags || []).map(n => NAGS[n]).find(Boolean);
     if (glyph) node.glyph = glyph;
     const posGlyph = (child.data.nags || []).map(n => POS_NAGS[n]).find(Boolean);
@@ -157,7 +170,7 @@ function keyPositionsOf(rep) {
           const id = `K:${epdOf(n.fen)}|${n.children[0].san}`;
           if (!seen.has(id)) {
             seen.add(id);
-            out.push({ id, chapter: ci, fen: n.fen, lastFrom: n.from, lastTo: n.to, text: stripKey(n.comment), correct: n.children[0], alts: n.children.slice(1) });
+            out.push({ id, chapter: ci, fen: n.fen, lastFrom: n.from, lastTo: n.to, text: stripKey(n.comment), solution: n.solution || '', correct: n.children[0], alts: n.children.slice(1) });
           }
         }
         walk(n.children);

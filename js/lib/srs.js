@@ -46,6 +46,7 @@ export function gradeCard(card, ok, mode, now = Date.now()) {
 export const hasPriority = rep => rep.chapters.some(c => c.priority);
 export const lessonsOf = rep => [...new Set(rep.chapters.map(c => c.lesson).filter(Boolean))];
 export const scopeOf = (settings, rep) => (settings.scopes && settings.scopes[rep.id]) || 'all';
+export const keyScopeOf = (settings, rep) => (settings.keyScopes && settings.keyScopes[rep.id]) || 'all';
 export function scopeChapters(rep, scope) {
   if (!scope || scope === 'all') return null;
   const set = new Set();

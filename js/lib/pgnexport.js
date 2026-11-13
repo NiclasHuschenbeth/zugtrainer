@@ -9,7 +9,7 @@ const BRUSH = { green: 'G', red: 'R', yellow: 'Y', blue: 'B' };
 
 function annotation(n) {
   const parts = [];
-  if (n.comment) parts.push(n.comment.replace(/[{}]/g, ''));
+  if (n.comment || n.solution) parts.push(((n.comment || '') + (n.solution ? ` Lösung: ${n.solution}` : '')).replace(/[{}]/g, '').trim());
   if (n.shapes && n.shapes.length) {
     const code = s => (BRUSH[s.brush] || 'G') + s.orig + (s.dest || '');
     const csl = n.shapes.filter(s => !s.dest).map(code);
@@ -20,7 +20,7 @@ function annotation(n) {
   return parts.length ? ` { ${parts.join(' ')} }` : '';
 }
 
-const annotated = n => !!(n.comment || (n.shapes && n.shapes.length));
+const annotated = n => !!(n.comment || n.solution || (n.shapes && n.shapes.length));
 
 function token(n, fenBefore, force) {
   const f = fenBefore.split(' ');

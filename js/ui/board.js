@@ -32,6 +32,7 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
       },
     });
     api.current = cg;
+    el.current.__cg = cg; // für Tests im Browser
     if (onReady) onReady(cg);
     return () => cg.destroy();
   }, []);

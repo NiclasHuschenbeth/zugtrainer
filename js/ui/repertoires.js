@@ -1,6 +1,6 @@
 import { html, useState } from 'preact';
 import { derived, parseRepertoirePgn } from '../lib/repertoire.js';
-import { dayKey, freshCount, lastDays, repStats, streakOf } from '../lib/srs.js';
+import { dayKey, freshCount, hasPriority, keyStats, lastDays, lessonsOf, repStats, scopeOf, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
@@ -28,11 +28,11 @@ function Home({ db, setGoal, train }) {
   const week = lastDays(a);
   const max = Math.max(a.goal, ...week.map(d => d.n), 1);
   const done = today >= a.goal;
-  const stats = db.repertoires.map(rep => ({ rep, s: repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts) }));
+  const stats = db.repertoires.map(rep => ({ rep, s: repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts, scopeOf(db.settings, rep)) }));
   const due = stats.reduce((n, x) => n + x.s.due, 0);
   const dueReps = stats.filter(x => x.s.due);
   const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
-  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts) > 0);
+  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts, scopeOf(db.settings, x.rep)) > 0);
 
   return html`<div class="home-top">
     <div class="card hero">
@@ -123,11 +123,20 @@ function RepTile({ rep, progress, open, alts }) {
 
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
 export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compare, remove, back }) {
-  const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts);
+  const scope = scopeOf(db.settings, rep);
+  const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts, scope);
   const depth = db.settings.depth || 0;
   const dd = derived(rep);
   const hasAlts = dd.mainKeys.size < dd.keys.size;
-  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts);
+  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope);
+  const ks = keyStats(rep, db.progress[rep.id] || {}, scope);
+  const lessons = lessonsOf(rep);
+  const prio = hasPriority(rep);
+  const chapters = s.chapters.map((c, i) => ({ ...c, i, lesson: rep.chapters[i].lesson || '', priority: !!rep.chapters[i].priority }));
+  const groups = lessons.length
+    ? [...lessons, ''].map(name => ({ name, items: chapters.filter(c => c.lesson === name) })).filter(g => g.items.length)
+    : [{ name: '', items: chapters }];
+  const setScope = v => setSettings({ scopes: { ...(db.settings.scopes || {}), [rep.id]: v } });
   const pct = pctOf(s.learned, s.total);
 
   return html`<div class="stack">
@@ -152,10 +161,32 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
       </div>
       <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>
       <div class="muted small">${s.learned} von ${s.total} Zügen gelernt (${pct} %)</div>
+      ${(lessons.length > 0 || prio) && html`<label class="scope">Lernauswahl
+        <select value=${scope} onChange=${ev => setScope(ev.target.value)}>
+          <option value="all">${prio ? 'Alles (Prioritäten zuerst)' : 'Alles'}</option>
+          ${prio && html`<option value="order">Alles in PGN-Reihenfolge</option>`}
+          ${prio && html`<option value="prio">Nur Prioritäten ★</option>`}
+          ${lessons.map(l => html`<option value=${`lesson:${l}`}>Lektion: ${l}</option>`)}
+        </select>
+      </label>`}
       <div class="row main-actions">
         <button class="btn primary big" disabled=${!fresh} onClick=${() => train(rep.id, 'learn')}>Neue Züge lernen${fresh ? ` (${fresh})` : ''}</button>
         <button class=${`btn big ${s.due ? 'accent' : ''}`} disabled=${!s.due} onClick=${() => train(rep.id, 'review')}>Wiederholen${s.due ? ` (${s.due})` : ''}</button>
       </div>
+      ${ks.total > 0 && html`<div class="keys-box">
+        <div class="row between top-align">
+          <div>
+            <b>Schlüsselstellungen</b>
+            <div class="muted small">${ks.total} im Kurs · ${ks.due} fällig · ${ks.fresh} neu</div>
+          </div>
+          <button class="btn primary" disabled=${ks.due + ks.fresh === 0} onClick=${() => train(rep.id, 'keys')}>Üben</button>
+        </div>
+        <label class="small muted">Stellungen pro Sitzung
+          <select value=${db.settings.keySize ?? 10} onChange=${ev => setSettings({ keySize: +ev.target.value })}>
+            ${[5, 10, 20, 0].map(n => html`<option value=${n}>${n || 'Alle'}</option>`)}
+          </select>
+        </label>
+      </div>`}
       <div class="depth">
         <div class="row between">
           <label for="depth-range" class="small muted" title="Es werden nur Züge bis zu dieser Zugnummer neu abgefragt. Die übrigen Varianten bleiben im Repertoire.">Lerntiefe</label>
@@ -173,14 +204,16 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
     <div class="card">
       <h2>Kapitel</h2>
       <div class="chapters">
-        ${s.chapters.map((c, i) => html`<div class="chapter">
+        ${groups.map(g => html`${g.name !== '' || lessons.length > 0 ? html`<div class="lesson-head">${g.name || 'Weitere Kapitel'}
+            <span class="muted small">${g.items.reduce((n, c) => n + c.learned, 0)} von ${g.items.reduce((n, c) => n + c.total, 0)} Zügen gelernt</span></div>` : null}
+          ${g.items.map(c => html`<div class="chapter">
           <div class="grow">
-            <b>${c.name}</b>
+            <b>${c.priority && html`<span class="prio" title="Priorität">★</span> `}${c.name}</b>
             <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
             <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
           </div>
-          <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', i)}>Lernen</button>
-        </div>`)}
+          <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', c.i)}>Lernen</button>
+        </div>`)}`)}
       </div>
     </div>
   </div>`;

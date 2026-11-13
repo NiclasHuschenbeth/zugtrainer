@@ -4,7 +4,7 @@ import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
 import { parseSquare } from 'chessops/util.js';
 import { derived, epdOf, moveLabel, posFromFen, turnOf } from '../lib/repertoire.js';
-import { buildTasks } from '../lib/srs.js';
+import { buildTasks, scopeOf } from '../lib/srs.js';
 import { sounds } from '../lib/sound.js';
 import { Board } from './board.js';
 
@@ -253,7 +253,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const d = derived(rep);
-  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, alts: !!settings.alts }), []);
+  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, alts: !!settings.alts, scope: scopeOf(settings, rep) }), []);
   const [, force] = useReducer(x => x + 1, 0);
   const eng = useRef(null);
   const gradeRef = useRef(onGrade);

@@ -179,11 +179,16 @@ function App() {
     setView({ name: 'train', repId, mode, chapter, focusKey, visits, nonce: Date.now(), backTo: backTo === undefined ? here : backTo });
   };
 
-  const addRepertoire = ({ name, color, chapters }) => {
+  const addRepertoire = ({ name, color, chapters, keySolutions }) => {
     const id = crypto.randomUUID();
-    update(cur => ({ repertoires: [...cur.repertoires, { id, name, color, chapters, createdAt: Date.now(), updatedAt: Date.now() }] }));
+    update(cur => ({
+      repertoires: [...cur.repertoires, { id, name, color, chapters, ...(keySolutions ? { keySolutions } : {}), createdAt: Date.now(), updatedAt: Date.now() }],
+    }));
     return id;
   };
+
+  const attachKeySolutions = (repId, keySolutions) =>
+    update(cur => ({ repertoires: cur.repertoires.map(r => (r.id === repId ? { ...r, keySolutions, updatedAt: Date.now() } : r)) }));
 
   const newRepertoire = color => {
     const id = addRepertoire({
@@ -262,6 +267,7 @@ function App() {
   } else if (view.name === 'rep' && rep) {
     body = html`<${RepertoireView}
       setSettings=${setSettings}
+      attachKeySolutions=${attachKeySolutions}
       db=${db}
       rep=${rep}
       train=${train}

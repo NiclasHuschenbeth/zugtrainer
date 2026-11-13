@@ -29,10 +29,11 @@ class Engine {
   }
 
   later(fn, ms) {
+    const tempo = { slow: 1.7, fast: 0.55 }[this.opts().tempo] || 1; // Tempo der vorgespielten Züge
     const t = setTimeout(() => {
       this.timers.delete(t);
       if (!this.dead) fn();
-    }, ms);
+    }, ms * tempo);
     this.timers.add(t);
   }
 

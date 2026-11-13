@@ -419,3 +419,20 @@ label.check.small { font-size: .85rem; }
   .drill { flex-direction: column; align-items: stretch; }
   .drill .btn { white-space: normal; text-align: center; }
 }
+
+/* Eröffnungsstatistik */
+.stat-list { display: flex; flex-direction: column; margin-top: .5rem; }
+.stat-row { display: flex; align-items: center; gap: .7rem; width: 100%; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-bottom: 1px solid var(--line); padding: .55rem .2rem; cursor: pointer; }
+.stat-row:disabled { cursor: default; opacity: 1; }
+.stat-row:hover:not(:disabled), .stat-row.open { background: var(--panel2); }
+.stat-row.sub { padding-left: 1.4rem; font-size: .9rem; color: var(--muted); }
+.stat-name { font-weight: 700; overflow-wrap: anywhere; }
+.stat-row.sub .stat-name { font-weight: 600; }
+.stat-n { color: var(--muted); font-size: .85rem; min-width: 2.6rem; text-align: right; font-variant-numeric: lining-nums tabular-nums; }
+.stat-score { min-width: 3.2rem; text-align: right; font-variant-numeric: lining-nums tabular-nums; }
+.wdl-bar { display: flex; width: 90px; height: 10px; border-radius: 5px; overflow: hidden; flex: none; background: var(--line); }
+.wdl-bar i { display: block; min-width: 0; }
+.wdl-bar .w { background: var(--ok); }
+.wdl-bar .d { background: #9AA6B8; }
+.wdl-bar .l { background: var(--bad); }
+@media (max-width: 520px) { .wdl-bar { width: 56px; } }

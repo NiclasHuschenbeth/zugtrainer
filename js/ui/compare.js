@@ -5,6 +5,7 @@ import { outcomeFor } from '../lib/games.js';
 import { derived, epdOf, moveLabel } from '../lib/repertoire.js';
 import { Board } from './board.js';
 import { GamesView } from './games.js';
+import { StatsView } from './stats.js';
 
 const gameLink = (g, ply) => (g.source === 'lichess' ? `${g.url}${g.userColor === 'black' ? '/black' : ''}#${ply}` : g.url);
 const opponent = g => (g.userColor === 'white' ? g.black : g.white);
@@ -119,9 +120,12 @@ export function CompareView({ db, go, train, setSettings, update }) {
           <button class=${tab === 'you' ? 'on' : ''} onClick=${() => { setTab('you'); setSel(null); }}>Deine Abweichungen (${data.you.length})</button>
           <button class=${tab === 'opponent' ? 'on' : ''} onClick=${() => { setTab('opponent'); setSel(null); }}>Lücken im Repertoire (${data.opponent.length})</button>
           <button class=${tab === 'games' ? 'on' : ''} onClick=${() => setTab('games')}>Alle Partien (${c.total})</button>
+          <button class=${tab === 'stats' ? 'on' : ''} onClick=${() => setTab('stats')}>Eröffnungsstatistik</button>
         </div>
 
-        ${tab === 'games'
+        ${tab === 'stats'
+          ? html`<${StatsView} games=${db.games} color=${side} />`
+          : tab === 'games'
           ? html`<${GameTable} rows=${data.rows} />`
           : !list.length
             ? html`<div class="card center muted">${tab === 'you' ? 'Stark – in diesen Partien bist du nie vom Repertoire abgewichen.' : 'Keine Lücken gefunden.'}</div>`

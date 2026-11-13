@@ -318,6 +318,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
         <div>
           <div class="eyebrow">${MODE_TITLE[mode]} · ${rep.name}</div>
           <h2>${rep.chapters[line.chapter].name}</h2>
+          ${rep.videos && rep.videos[rep.chapters[line.chapter].name] && html`<a class="btn ghost small" href=${rep.videos[rep.chapters[line.chapter].name]} target="_blank" rel="noopener">▶ Video zum Kapitel</a>`}
         </div>
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>

@@ -102,7 +102,7 @@ const must = ({ data, error }) => {
 /** Kurse, die dem angemeldeten Nutzer freigeschaltet sind (Ablefy-Kauf, siehe tools/supabase-courses.sql). */
 export async function fetchCourses() {
   const c = await getClient();
-  return must(await c.from('courses').select('id,name,color,version,pgn,key_solutions'));
+  return must(await c.from('courses').select('id,name,color,version,pgn,key_solutions,videos'));
 }
 
 /** Server-Seite des Abgleichs auf Basis von Supabase. */

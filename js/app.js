@@ -74,20 +74,30 @@ function App() {
       const seen = { ...(cur.settings.coursesSeen || {}) };
       const have = new Set(cur.repertoires.map(r => r.id));
       const add = [];
+      const videoPatch = {}; // Videolinks nachträglich an schon vorhandene Kurs-Repertoires hängen
       let changed = false;
       for (const row of rows) {
-        if (seen[row.id]) continue;
+        const id = 'course-' + row.id;
+        const hasVideos = row.videos && Object.keys(row.videos).length > 0;
+        if (seen[row.id]) {
+          const mine = cur.repertoires.find(r => r.id === id);
+          if (mine && hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) videoPatch[id] = row.videos;
+          continue;
+        }
         seen[row.id] = row.version || 1;
         changed = true;
-        const id = 'course-' + row.id;
         if (have.has(id)) continue;
         const chapters = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
         if (!chapters.length) continue;
         const ks = row.key_solutions && Object.keys(row.key_solutions).length ? { keySolutions: row.key_solutions } : {};
-        add.push({ id, name: row.name, color: row.color, chapters, ...ks, createdAt: Date.now(), updatedAt: Date.now() });
+        const vd = hasVideos ? { videos: row.videos } : {};
+        add.push({ id, name: row.name, color: row.color, chapters, ...ks, ...vd, createdAt: Date.now(), updatedAt: Date.now() });
       }
-      if (!changed) return;
-      update(c => ({ repertoires: [...c.repertoires, ...add], settings: { ...c.settings, coursesSeen: seen, updatedAt: Date.now() } }));
+      if (!changed && !Object.keys(videoPatch).length) return;
+      update(c => ({
+        repertoires: [...c.repertoires.map(r => (videoPatch[r.id] ? { ...r, videos: videoPatch[r.id], updatedAt: Date.now() } : r)), ...add],
+        ...(changed ? { settings: { ...c.settings, coursesSeen: seen, updatedAt: Date.now() } } : {}),
+      }));
     } catch (err) {
       console.warn('Kurse konnten nicht geladen werden', err);
     }

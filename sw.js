@@ -1,12 +1,14 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = 'bdaeb1f7a5';
+const VERSION = '852963d4d8';
 const FILES = [
   "./",
+  ".gitignore",
   "css/style.css",
   "icons/icon-180.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
+  "icons/icon.svg",
   "icons/logo-icon.png",
   "icons/logo-wordmark-trainer.png",
   "icons/logo-wordmark.png",

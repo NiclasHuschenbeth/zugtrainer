@@ -238,6 +238,7 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
             <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
             <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
           </div>
+          ${rep.videos && rep.videos[c.name] && html`<a class="btn ghost small" href=${rep.videos[c.name]} target="_blank" rel="noopener" title="Video zum Kapitel im Kurs ansehen">▶ Video</a>`}
           <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', c.i)}>Lernen</button>
         </div>`)}`)}
       </div>

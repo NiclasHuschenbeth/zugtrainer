@@ -28,6 +28,13 @@ export function BoardSettings({ settings, setSettings, onClose }) {
         </div>
       </div>
 
+      <label class="field">Koordinaten
+        <select value=${settings.coords || 'outside'} onChange=${ev => setSettings({ coords: ev.target.value })}>
+          <option value="outside">Außen am Rahmen</option>
+          <option value="inside">Auf den Feldern</option>
+        </select>
+      </label>
+
       <div class="stack tight size-setting">
         <label for="board-size"><b>Brettgröße</b> <span class="muted small">(am Computer, beim Lernen)</span></label>
         <input id="board-size" type="range" min="1" max="5" step="1" value=${size} onInput=${ev => setSettings({ boardSize: +ev.target.value })} />

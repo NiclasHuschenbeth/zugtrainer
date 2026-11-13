@@ -122,7 +122,7 @@ function RepTile({ rep, progress, open, alts }) {
 }
 
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
-export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compare, remove, back }) {
+export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, scrim, compare, remove, back }) {
   const scope = scopeOf(db.settings, rep);
   const lessons = lessonsOf(rep);
   const prio = hasPriority(rep);
@@ -139,6 +139,23 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
     ...(prio ? [{ v: 'prio', t: 'Nur Prioritäten ★', n: keyStats(rep, kProg, 'prio') }] : []),
     ...lessons.map(l => ({ v: `lesson:${l}`, t: l, n: keyStats(rep, kProg, `lesson:${l}`) })),
   ].filter(o => o.v === 'all' || o.n.total > 0);
+  const ksAll = dd.keyPositions;
+  const withText = ksAll.filter(k => k.solution).length;
+  const pickSolutions = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = async () => {
+      try {
+        const j = JSON.parse(await inp.files[0].text());
+        if (!j.keySolutions) throw new Error('keine Lösungstexte');
+        attachKeySolutions(rep.id, j.keySolutions);
+      } catch {
+        alert('Diese Datei enthält keine Lösungstexte für Schlüsselstellungen.');
+      }
+    };
+    inp.click();
+  };
   const setKeyScope = v => setSettings({ keyScopes: { ...(db.settings.keyScopes || {}), [rep.id]: v } });
   const chapters = s.chapters.map((c, i) => ({ ...c, i, lesson: rep.chapters[i].lesson || '', priority: !!rep.chapters[i].priority }));
   const groups = lessons.length
@@ -161,6 +178,7 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
         <${Menu} label="Werkzeuge" className="btn" align="right">
           <${MenuItem} title="Editor" hint="Züge, Varianten und Kommentare bearbeiten" onClick=${() => edit(rep.id)} />
           <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch?" onClick=${() => edit(rep.id, 'coverage')} />
+          ${ksAll.length > 0 && html`<${MenuItem} title="Lösungstexte laden" hint="Erklärungen zu den Schlüsselstellungen aus einer .json-Datei des Kurses" onClick=${pickSolutions} />`}
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
           <${MenuItem} title="Meine Partien auswerten" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
           <${MenuDivider} />
@@ -185,7 +203,7 @@ export function RepertoireView({ db, rep, train, setSettings, edit, scrim, compa
         <div class="row between top-align">
           <div>
             <b>Schlüsselstellungen</b>
-            <div class="muted small">${ks.total} in der Auswahl · ${ks.due} fällig · ${ks.fresh} neu</div>
+            <div class="muted small">${ks.total} in der Auswahl · ${ks.due} fällig · ${ks.fresh} neu${withText ? ` · ${withText} von ${ksAll.length} mit Erklärung` : ''}</div>
           </div>
           <button class="btn primary" disabled=${ks.due + ks.fresh === 0} onClick=${() => train(rep.id, 'keys')}>Üben</button>
         </div>
@@ -240,12 +258,19 @@ function Upload({ addRepertoire, newRepertoire, hasAny }) {
     setError('');
     try {
       let pgn = text;
-      for (const f of files) pgn += '\n\n' + (await f.text());
+      let keySolutions = null;
+      for (const f of files) {
+        if (/\.json$/i.test(f.name)) {
+          const j = JSON.parse(await f.text());
+          if (j.keySolutions) keySolutions = j.keySolutions;
+        } else pgn += '\n\n' + (await f.text());
+      }
       if (!pgn.trim()) return setError('Bitte eine PGN-Datei auswählen oder PGN-Text einfügen.');
       const chapters = parseRepertoirePgn(pgn);
       if (!chapters.length) return setError('In der PGN wurden keine gültigen Züge gefunden.');
-      const fallback = files[0] ? files[0].name.replace(/\.pgn$/i, '') : chapters[0].name;
-      addRepertoire({ name: name.trim() || fallback, color, chapters });
+      const firstPgn = files.find(f => !/\.json$/i.test(f.name));
+      const fallback = firstPgn ? firstPgn.name.replace(/\.pgn$/i, '') : chapters[0].name;
+      addRepertoire({ name: name.trim() || fallback, color, chapters, ...(keySolutions ? { keySolutions } : {}) });
       setName('');
       setText('');
       setFiles([]);
@@ -283,8 +308,9 @@ function Upload({ addRepertoire, newRepertoire, hasAny }) {
       </label>
     </div>
     <label>PGN-Datei(en)
-      <input type="file" accept=".pgn,text/plain" multiple onChange=${e => setFiles([...e.target.files])} />
+      <input type="file" accept=".pgn,.json,text/plain,application/json" multiple onChange=${e => setFiles([...e.target.files])} />
     </label>
+    <p class="muted small">Zu einem Kurs gehört manchmal eine zweite Datei mit Lösungstexten für die Schlüsselstellungen (Endung .json). Wähle sie einfach zusammen mit der PGN aus.</p>
     <label>… oder PGN-Text einfügen
       <textarea rows="4" value=${text} onInput=${e => setText(e.target.value)} placeholder="1. e4 e5 2. Nf3 (2. Bc4 Nf6) 2... Nc6 *"></textarea>
     </label>

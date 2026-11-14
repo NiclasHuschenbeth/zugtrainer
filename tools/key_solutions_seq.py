@@ -83,8 +83,10 @@ def read_abschnitt(files):
                 continue
             opts, sol = {}, None
             for k, rest in re.findall(r'^([A-D])\s+(.+)$', b, re.M):
-                if re.match(r'\d+\s*\.', rest) and len(rest) < 25:
-                    opts[k] = rest
+                if re.match(r'\d+\s*\.', rest) and len(rest) < 60:
+                    # Antworten stehen teils in einer Zeile ohne Trenner: "A 2...Sf6B 2...Sc6C 2...c6"
+                    for kk, mv_txt in re.findall(r'([A-D])\s*(\d+\s*\.{1,3}\s*[^\s]+?)(?=[A-D]\s*\d+\s*\.|\s|$)', k + ' ' + rest):
+                        opts[kk] = mv_txt
                 elif len(rest) > 25:
                     sol = (k, rest)
             if sol and sol[0] in opts:

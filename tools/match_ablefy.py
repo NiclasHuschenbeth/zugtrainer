@@ -55,7 +55,7 @@ def chapters_of(pgn):
 def align(chs, les, min_score=0.45):
     """Monotone Zuordnung (Dynamische Programmierung): Kapitel i -> Lektion j, Reihenfolge bleibt erhalten."""
     n, m = len(chs), len(les)
-    S = [[sim(c, l['lesson']) for l in les] for c in chs]
+    S = [[sim(c, l.get('_t', l['lesson'])) for l in les] for c in chs]
     best = [[0.0] * (m + 1) for _ in range(n + 1)]
     arrow = [[None] * (m + 1) for _ in range(n + 1)]
     for i in range(1, n + 1):
@@ -81,6 +81,10 @@ def align(chs, les, min_score=0.45):
 def main(lessons_file, slug, outdir, *specs):
     lessons = json.load(io.open(lessons_file, encoding='utf-8'))
     les = [l for l in lessons if not SKIP.search(l['lesson'])]
+    if 'ctx=1' in specs:  # Lektionstitel ohne Zusammenhang (z. B. nur "4.c3"): Modulname beim Vergleich mitnehmen
+        for l in lessons:
+            l['_t'] = l['cat'] + ' ' + l['lesson']
+        specs = tuple(x for x in specs if x != 'ctx=1')
     byid_all = {str(l['id']): l for l in lessons}  # Korrekturen dürfen auch ausgeblendete Lektionen (z. B. "Einführung") wählen
     videos = {}
     fixes = {}
@@ -108,32 +112,28 @@ def main(lessons_file, slug, outdir, *specs):
         print(f'   unbenutzte Lektionen: {unused}')
         out, last_cat = [], les[0]['cat']
         print(f'== {label}: {len(games)} Kapitel, {sum(a is not None for a in al)} zugeordnet')
+        title_of = lambda l: re.sub(r'\s*\(P\)\s*$', '', l['lesson']).replace('"', "'").strip()
         for k, (g, nm, a) in enumerate(zip(games, names, al), 1):
-            extra = ''
-            if k - 1 in fixed:
-                l = fixed[k - 1]
+            l = fixed.get(k - 1) or (les[a[0]] if a is not None else None)
+            extra_p, chap = '', ''
+            if l is not None:
                 last_cat = l['cat']
-                videos.setdefault(nm, BASE.format(slug=slug, id=l['id']))
-                extra_p = '[Priority "1"]\n' if '(P)' in l['lesson'] else ''
-            elif a is not None:
-                l = les[a[0]]
-                last_cat = l['cat']
-                videos.setdefault(nm, BASE.format(slug=slug, id=l['id']))
+                chap = f'[ChapterName "{title_of(l)}"]\n'  # Kapiteltitel = Lektionstitel von der Kursseite
+                videos.setdefault(title_of(l), BASE.format(slug=slug, id=l['id']))
                 if '(P)' in l['lesson']:
                     extra_p = '[Priority "1"]\n'
-                else:
-                    extra_p = ''
-                if a[1] < 0.8:
+                if a is not None and (k - 1) not in fixed and a[1] < 0.8:
                     print(f'   ? {k:2} {nm[:70]!r} -> {l["lesson"][:70]!r} ({a[1]:.2f})')
             else:
-                extra_p = ''
+                videos.setdefault(nm, '')  # kein Video; Name nur zur Kontrolle
                 print(f'   - {k:2} {nm[:80]!r} ohne Lektion (Modul von davor: {last_cat[:40]!r})')
-            extra = f'[Lesson "{last_cat}"]\n' + extra_p
+            extra = chap + f'[Lesson "{last_cat}"]\n' + extra_p
             lines = g.split('\n')
             blank = next(i for i, ln in enumerate(lines) if not ln.strip())
             lines.insert(blank, extra.rstrip('\n'))
             out.append('\n'.join(lines))
         io.open(f'{outdir}/{label}.pgn', 'w', encoding='utf-8', newline='\n').write('\n\n'.join(out))
+    videos = {k: v for k, v in videos.items() if v}
     io.open(f'{outdir}/videos.json', 'w', encoding='utf-8').write(json.dumps(videos, ensure_ascii=False, indent=1))
     print(len(videos), 'Videolinks')
 

@@ -254,7 +254,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const d = derived(rep);
-  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, from: settings.from || 1, alts: !!settings.alts, scope: scopeOf(settings, rep) }), []);
+  const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, from: settings.from || 1, ranges: (settings.ranges || {})[rep.id] || null, alts: !!settings.alts, scope: scopeOf(settings, rep) }), []);
   const [, force] = useReducer(x => x + 1, 0);
   const eng = useRef(null);
   const gradeRef = useRef(onGrade);
@@ -298,7 +298,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   if (!tasks.length) {
     return html`<div class="card center">
       <h2>${MODE_TITLE[mode]}: ${rep.name}</h2>
-      <p>${mode === 'learn' ? settings.depth ? `Bis Zug ${settings.depth} ist hier alles gelernt. Stell die Lerntiefe höher, um weiterzumachen.` : 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Linie wurde im Repertoire nicht gefunden.'}</p>
+      <p>${mode === 'learn' ? settings.depth || (settings.from || 1) > 1 ? 'Im gewählten Zugbereich ist hier alles gelernt. Erweitere den Bereich, um weiterzumachen.' : 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Linie wurde im Repertoire nicht gefunden.'}</p>
       <button class="btn primary" onClick=${onExit}>Zurück zur Übersicht</button>
     </div>`;
   }

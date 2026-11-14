@@ -218,6 +218,11 @@ function App() {
     })();
   }, []);
 
+  // Neue Ansicht: immer oben beginnen (sonst bleibt die Scrollposition der vorigen Seite stehen)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view.name, view.repId, view.mode, view.chapter]);
+
   // Jede neue Ansicht bekommt einen Eintrag im Browserverlauf
   useEffect(() => {
     if (!routeReady.current) return;

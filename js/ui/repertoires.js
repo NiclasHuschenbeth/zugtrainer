@@ -4,6 +4,7 @@ import { dayKey, freshCount, hasPriority, keyScopeOf, keyStats, lastDays, lesson
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
+import { RangeSlider, rangeLabel } from './rangeslider.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -32,7 +33,7 @@ function Home({ db, setGoal, train }) {
   const due = stats.reduce((n, x) => n + x.s.due, 0);
   const dueReps = stats.filter(x => x.s.due);
   const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
-  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts, scopeOf(db.settings, x.rep), db.settings.from || 1) > 0);
+  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts, scopeOf(db.settings, x.rep), db.settings.from || 1, (db.settings.ranges || {})[x.rep.id] || null) > 0);
 
   return html`<div class="home-top">
     <div class="card hero">
@@ -129,9 +130,13 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
   const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts, scope);
   const depth = db.settings.depth || 0;
   const from = db.settings.from || 1;
+  const ranges = (db.settings.ranges || {})[rep.id] || {};
+  const [openRange, setOpenRange] = useState(null);
+  const setRange = (i, f, t) => setSettings({ ranges: { ...(db.settings.ranges || {}), [rep.id]: { ...ranges, [i]: { from: f, to: t } } } });
+  const clearRange = i => { const r = { ...ranges }; delete r[i]; setSettings({ ranges: { ...(db.settings.ranges || {}), [rep.id]: r } }); };
   const dd = derived(rep);
   const hasAlts = dd.mainKeys.size < dd.keys.size;
-  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope, from);
+  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope, from, ranges);
   const keyScope = keyScopeOf(db.settings, rep);
   const kProg = db.progress[rep.id] || {};
   const ks = keyStats(rep, kProg, keyScope);
@@ -216,19 +221,10 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
       </div>`}
       <div class="depth">
         <div class="row between">
-          <label for="depth-range" class="small muted" title="Es werden nur Züge bis zu dieser Zugnummer neu abgefragt. Die übrigen Varianten bleiben im Repertoire.">Lerntiefe</label>
-          <b class="depth-val">${depth ? `bis Zug ${depth}` : 'alle Züge (15+)'}</b>
+          <span class="small muted" title="Nur Züge in diesem Bereich werden neu abgefragt. Frühere Züge werden vorgespielt, spätere bleiben im Repertoire. Pro Kapitel lässt sich der Bereich einzeln ändern.">Zugbereich zum Lernen</span>
+          <b class="depth-val">${rangeLabel(from, depth)}</b>
         </div>
-        <input id="depth-range" type="range" min="5" max="16" step="1" value=${depth || 16} aria-valuetext=${depth ? `bis Zug ${depth}` : 'alle Züge'}
-          onInput=${ev => { const v = +ev.target.value; setSettings({ depth: v > 15 ? 0 : v }); }} />
-        <div class="depth-scale"><span>5</span><span>10</span><span>15+</span></div>
-        <div class="row between from-row">
-          <label for="from-range" class="small muted" title="Züge vor dieser Zugnummer werden nur vorgespielt und nicht abgefragt. So lernst du zum Beispiel erst ab dem 7. Zug.">Lernen ab</label>
-          <b class="depth-val">${from > 1 ? `ab Zug ${from}` : 'von Anfang an'}</b>
-        </div>
-        <input id="from-range" type="range" min="1" max="15" step="1" value=${from} aria-valuetext=${from > 1 ? `ab Zug ${from}` : 'von Anfang an'}
-          onInput=${ev => { const v = +ev.target.value; setSettings({ from: v, ...(depth && depth < v ? { depth: v } : {}) }); }} />
-        <div class="depth-scale"><span>1</span><span>8</span><span>15</span></div>
+        <${RangeSlider} from=${from} to=${depth} onChange=${(f, t) => setSettings({ from: f, depth: t })} />
         ${hasAlts && html`<label class="check alts" title="Aus: Es wird nur die Hauptvariante abgefragt (jeweils der erste Zug im PGN). Alternativen bleiben im Repertoire.">
           <input type="checkbox" checked=${!!db.settings.alts} onChange=${ev => setSettings({ alts: ev.target.checked })} /> Auch Alternativzüge trainieren
         </label>`}
@@ -243,13 +239,19 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
             <span class="muted small">${g.items.reduce((n, c) => n + c.learned, 0)} von ${g.items.reduce((n, c) => n + c.total, 0)} Zügen gelernt</span></div>` : null}
           ${g.items.map(c => html`<div class="chapter">
           <div class="grow">
-            <b>${c.priority && html`<span class="prio" title="Priorität">★</span> `}${c.name}</b>
+            <b>${c.priority && html`<span class="prio" title="Priorität">★</span> `}${c.name}${ranges[c.i] && html`<span class="range-badge" title="Eigener Zugbereich für dieses Kapitel">${rangeLabel(ranges[c.i].from, ranges[c.i].to)}</span>`}</b>
             <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
             <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
           </div>
           <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', c.i)}>Lernen</button>
           ${rep.videos && rep.videos[c.name] && html`<a class="btn ghost small" href=${rep.videos[c.name]} target="_blank" rel="noopener" title="Video zum Kapitel im Kurs ansehen">▶ Video</a>`}
-        </div>`)}`)}
+          <button class="btn ghost small" onClick=${() => setOpenRange(openRange === c.i ? null : c.i)} title="Zugbereich nur für dieses Kapitel festlegen" aria-label="Zugbereich für dieses Kapitel">⚙</button>
+        </div>
+        ${openRange === c.i && html`<div class="chapter-range">
+          <div class="row between"><span class="small muted">Zugbereich nur für dieses Kapitel</span><b class="depth-val">${ranges[c.i] ? rangeLabel(ranges[c.i].from, ranges[c.i].to) : `wie oben (${rangeLabel(from, depth)})`}</b></div>
+          <${RangeSlider} from=${ranges[c.i] ? ranges[c.i].from : from} to=${ranges[c.i] ? ranges[c.i].to : depth} onChange=${(f, t) => setRange(c.i, f, t)} />
+          ${ranges[c.i] && html`<button class="link small" onClick=${() => clearRange(c.i)}>Zurücksetzen auf den allgemeinen Bereich</button>`}
+        </div>`}`)}`)}
       </div>
     </div>
   </div>`;

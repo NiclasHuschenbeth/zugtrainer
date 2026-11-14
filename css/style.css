@@ -491,3 +491,16 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 /* Hinweise zur Kapitelliste und zum Lernstart */
 .prio-note { margin: 0 0 .6rem; }
 .from-row { margin-top: .9rem; }
+
+/* Bereichsregler (erster und letzter Zug) */
+.dual { position: relative; height: 28px; width: 100%; }
+.dual-track { position: absolute; left: 9px; right: 9px; top: 12px; height: 4px; border-radius: 2px; background: var(--line); }
+.dual-fill { position: absolute; top: 0; bottom: 0; background: var(--primary); border-radius: 2px; }
+.dual input[type=range], .depth .dual input[type=range] { position: absolute; left: 0; top: 0; width: 100%; height: 28px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.dual input[type=range]::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+.dual input[type=range]::-moz-range-track { background: transparent; }
+.dual input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 18px; height: 18px; margin-top: 5px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--primary); cursor: pointer; }
+.dual input[type=range]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--primary); cursor: pointer; }
+.chapter-range { padding: .4rem 0 .9rem; border-top: 1px dashed var(--line); }
+.chapter-range .row { margin-bottom: .2rem; }
+.range-badge { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: 999px; background: var(--accent-soft, #E8EFF6); color: var(--primary); font-size: .72rem; font-weight: 700; }

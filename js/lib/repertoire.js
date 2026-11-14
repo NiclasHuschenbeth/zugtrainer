@@ -82,7 +82,14 @@ function build(pgnNode, pos) {
 /** PGN-Text (mehrere Partien/Kapitel, Varianten, Kommentare) -> Kapitel. */
 export function parseRepertoirePgn(pgn) {
   const chapters = [];
-  for (const game of parsePgn(pgn)) {
+  const games = parsePgn(pgn);
+  // Steht in "Event" überall derselbe Text (z. B. nur der Modulname), taugt er nicht als Kapiteltitel: dann White – Black nehmen
+  const eventCount = new Map();
+  for (const g of games) {
+    const e = g.headers.get('Event');
+    if (e && e !== '?') eventCount.set(e, (eventCount.get(e) || 0) + 1);
+  }
+  for (const game of games) {
     let pos;
     try {
       pos = startingPosition(game.headers).unwrap();
@@ -96,7 +103,7 @@ export function parseRepertoirePgn(pgn) {
       return v && v !== '?' ? v : '';
     };
     const players = h('White') && h('Black') ? `${h('White')} – ${h('Black')}` : '';
-    const name = h('ChapterName') || h('Event') || players || `Kapitel ${chapters.length + 1}`;
+    const name = h('ChapterName') || (h('Event') && eventCount.get(h('Event')) === 1 ? h('Event') : players || h('Event')) || `Kapitel ${chapters.length + 1}`;
     const lesson = h('Lesson');
     const priority = parseInt(h('Priority'), 10) > 0;
     chapters.push({ name, startFen: makeFen(pos.toSetup()), children, ...(lesson ? { lesson } : {}), ...(priority ? { priority: true } : {}) });

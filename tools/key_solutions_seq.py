@@ -72,9 +72,56 @@ def read_one(files):
     return seq
 
 
+def read_abschnitt(files):
+    """Format D: Kapiteldokumente mit Blöcken "Abschnitt N", Antworten "A 5.Lxd6 / B ... / C ..." und Erklärung "B Text"."""
+    seq = []
+    for f in files:
+        txt = odt_text(f)
+        for b in re.split(r'\n(?=[^\n]*Abschnitt \d+)', txt):
+            m = re.search(r'Abschnitt (\d+)', b)
+            if not m:
+                continue
+            opts, sol = {}, None
+            for k, rest in re.findall(r'^([A-D])\s+(.+)$', b, re.M):
+                if re.match(r'\d+\s*\.', rest) and len(rest) < 25:
+                    opts[k] = rest
+                elif len(rest) > 25:
+                    sol = (k, rest)
+            if sol and sol[0] in opts:
+                mv = parse_move(opts[sol[0]])
+                if mv:
+                    seq.append((int(m.group(1)), mv[0], mv[1], sol[1].strip()))
+    seq.sort()
+    return seq
+
+
+def read_antwort(files):
+    """Format E: ein Dokument, Blöcke "N – K7 – S1 …", Antworten a) b) c), danach "1c Antwort 3: 9...e5 (aus Nr. …)" und der Erklärungstext."""
+    seq = []
+    for f in files:
+        txt = odt_text(f)
+        for b in re.split(r'\n(?=\s*\d+\s+[–-]\s+K\d+)', txt):
+            m = re.match(r'\s*(\d+)\s+[–-]\s+K', b)
+            a = re.search(r'^\s*\d+[a-d]\s+Antwort\s+\d+:\s*(\S+)', b, re.M)
+            if not (m and a):
+                continue
+            mv = parse_move(a.group(1))
+            rest = b[a.end():].split('\n')
+            text = next((ln.strip() for ln in rest[1:] if len(ln.strip()) > 25), '')
+            ch = re.search(r'aus Nr\.\s*(\d+)', b)
+            if mv and text:
+                seq.append((int(m.group(1)), mv[0], mv[1], text, int(ch.group(1)) if ch else None))
+    seq.sort()
+    return seq
+
+
 def main(out, pgn, q, l=None):
     qf = q.split(',')
-    if l:
+    if not l and 'Abschnitt' in odt_text(qf[0]):
+        seq = read_abschnitt(qf)
+    elif not l and 'Antwort' in odt_text(qf[0]):
+        seq = read_antwort(qf)
+    elif l:
         lf = l.split(',')
         if len(qf) == len(lf) and len(qf) > 1:
             seq = [x for a, b in zip(qf, lf) for x in read_sep([a], [b])]  # Nummerierung kann pro Teil neu beginnen
@@ -85,14 +132,21 @@ def main(out, pgn, q, l=None):
     text = io.open(pgn, encoding='utf-8-sig').read()
     games = re.split(r'\n\n(?=\[Event )', text)
     keys = [(ci, ply, san) for ci, g in enumerate(games, 1) for san, ply in key_nodes(g.partition('\n\n')[2])]
-    a = [(p, s) for _, p, s, _ in seq]
-    b = [(ply, san) for _, ply, san in keys]
-    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
     res = {}
-    for blk in sm.get_matching_blocks():
-        for k in range(blk.size):
-            ci, ply, san = keys[blk.b + k]
-            res[f'{ci}:{ply}:{san}'] = seq[blk.a + k][3]
+    if seq and len(seq[0]) == 5 and all(x[4] for x in seq):
+        # Dokument nennt das Kapitel ("aus Nr. N"): direkt über (Kapitel, Halbzug, Zug) zuordnen
+        have = {(ci, ply, san) for ci, ply, san in keys}
+        for _, ply, san, text, ch in seq:
+            if (ch, ply, san) in have:
+                res[f'{ch}:{ply}:{san}'] = text
+    else:
+        a = [(x[1], x[2]) for x in seq]
+        b = [(ply, san) for _, ply, san in keys]
+        sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+        for blk in sm.get_matching_blocks():
+            for k in range(blk.size):
+                ci, ply, san = keys[blk.b + k]
+                res[f'{ci}:{ply}:{san}'] = seq[blk.a + k][3]
     io.open(out, 'w', encoding='utf-8').write(json.dumps({'keySolutions': res}, ensure_ascii=False, indent=1))
     print(f'{len(seq)} Fragen mit Lösung, {len(keys)} Schlüsselstellungen im PGN, {len(res)} zugeordnet, {len(seq) - len(res)} Fragen ohne Treffer')
 

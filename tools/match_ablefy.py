@@ -95,10 +95,14 @@ def main(lessons_file, slug, outdir, *specs):
         games, names = chapters_of(pgn)
         al = align(names, les)
         fixed = {}
-        for k, nm in enumerate(names):
-            for key, lid in fixes.items():
-                if nm == key or nm.startswith(key):
-                    fixed[k] = byid_all[str(lid)]
+        for key, lid in fixes.items():
+            if key.startswith('#'):  # "#24": Kapitelnummer (1-basiert), z. B. wenn zwei Kapitel gleich heißen
+                if int(key[1:]) - 1 < len(names):
+                    fixed[int(key[1:]) - 1] = byid_all[str(lid)]
+                continue
+            exact = [k for k, nm in enumerate(names) if nm == key]
+            for k in exact or [k for k, nm in enumerate(names) if nm.startswith(key)]:  # erst exakt, sonst Anfang des Namens
+                fixed[k] = byid_all[str(lid)]
         used = {a[0] for k, a in enumerate(al) if a is not None and k not in fixed} | {les.index(l) for l in fixed.values() if l in les}
         unused = [l['lesson'][:75] for i, l in enumerate(les) if i not in used]
         print(f'   unbenutzte Lektionen: {unused}')
@@ -109,12 +113,12 @@ def main(lessons_file, slug, outdir, *specs):
             if k - 1 in fixed:
                 l = fixed[k - 1]
                 last_cat = l['cat']
-                videos[nm] = BASE.format(slug=slug, id=l['id'])
+                videos.setdefault(nm, BASE.format(slug=slug, id=l['id']))
                 extra_p = '[Priority "1"]\n' if '(P)' in l['lesson'] else ''
             elif a is not None:
                 l = les[a[0]]
                 last_cat = l['cat']
-                videos[nm] = BASE.format(slug=slug, id=l['id'])
+                videos.setdefault(nm, BASE.format(slug=slug, id=l['id']))
                 if '(P)' in l['lesson']:
                     extra_p = '[Priority "1"]\n'
                 else:

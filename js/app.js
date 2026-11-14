@@ -101,6 +101,15 @@ function App() {
           const mine = cur.repertoires.find(r => r.id === id);
           if (mine) {
             const p = {};
+            // Neue Kursversion: Kapiteltitel aus dem aktuellen PGN übernehmen (Struktur und Lernstand bleiben)
+            if ((row.version || 1) > (typeof seen[row.id] === 'number' ? seen[row.id] : 1)) {
+              const fresh = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
+              if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
+                p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
+              }
+              seen[row.id] = row.version || 1;
+              changed = true;
+            }
             if (hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) p.videos = row.videos;
             if (row.color && mine.color !== row.color) p.color = row.color;
             if (Object.keys(p).length) videoPatch[id] = p;

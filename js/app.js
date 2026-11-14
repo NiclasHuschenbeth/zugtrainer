@@ -112,6 +112,8 @@ function App() {
             }
             if (hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) p.videos = row.videos;
             if (row.color && mine.color !== row.color) p.color = row.color;
+            // Lösungstexte der Schlüsselstellungen aktuell halten (kommen vom Kurs, nicht vom Nutzer)
+            if (row.key_solutions && Object.keys(row.key_solutions).length && JSON.stringify(mine.keySolutions || {}) !== JSON.stringify(row.key_solutions)) p.keySolutions = row.key_solutions;
             if (Object.keys(p).length) videoPatch[id] = p;
           }
           continue;

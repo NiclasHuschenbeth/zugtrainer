@@ -32,7 +32,7 @@ function Home({ db, setGoal, train }) {
   const due = stats.reduce((n, x) => n + x.s.due, 0);
   const dueReps = stats.filter(x => x.s.due);
   const next = [...dueReps].sort((x, y) => y.s.due - x.s.due)[0];
-  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts, scopeOf(db.settings, x.rep)) > 0);
+  const fresh = stats.find(x => freshCount(x.rep, db.progress[x.rep.id] || {}, db.settings.depth || 0, !!db.settings.alts, scopeOf(db.settings, x.rep), db.settings.from || 1) > 0);
 
   return html`<div class="home-top">
     <div class="card hero">
@@ -128,9 +128,10 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
   const prio = hasPriority(rep);
   const s = repStats(rep, db.progress[rep.id] || {}, !!db.settings.alts, scope);
   const depth = db.settings.depth || 0;
+  const from = db.settings.from || 1;
   const dd = derived(rep);
   const hasAlts = dd.mainKeys.size < dd.keys.size;
-  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope);
+  const fresh = freshCount(rep, db.progress[rep.id] || {}, depth, !!db.settings.alts, scope, from);
   const keyScope = keyScopeOf(db.settings, rep);
   const kProg = db.progress[rep.id] || {};
   const ks = keyStats(rep, kProg, keyScope);
@@ -221,6 +222,13 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
         <input id="depth-range" type="range" min="5" max="16" step="1" value=${depth || 16} aria-valuetext=${depth ? `bis Zug ${depth}` : 'alle Züge'}
           onInput=${ev => { const v = +ev.target.value; setSettings({ depth: v > 15 ? 0 : v }); }} />
         <div class="depth-scale"><span>5</span><span>10</span><span>15+</span></div>
+        <div class="row between from-row">
+          <label for="from-range" class="small muted" title="Züge vor dieser Zugnummer werden nur vorgespielt und nicht abgefragt. So lernst du zum Beispiel erst ab dem 7. Zug.">Lernen ab</label>
+          <b class="depth-val">${from > 1 ? `ab Zug ${from}` : 'von Anfang an'}</b>
+        </div>
+        <input id="from-range" type="range" min="1" max="15" step="1" value=${from} aria-valuetext=${from > 1 ? `ab Zug ${from}` : 'von Anfang an'}
+          onInput=${ev => { const v = +ev.target.value; setSettings({ from: v, ...(depth && depth < v ? { depth: v } : {}) }); }} />
+        <div class="depth-scale"><span>1</span><span>8</span><span>15</span></div>
         ${hasAlts && html`<label class="check alts" title="Aus: Es wird nur die Hauptvariante abgefragt (jeweils der erste Zug im PGN). Alternativen bleiben im Repertoire.">
           <input type="checkbox" checked=${!!db.settings.alts} onChange=${ev => setSettings({ alts: ev.target.checked })} /> Auch Alternativzüge trainieren
         </label>`}
@@ -229,6 +237,7 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
 
     <div class="card">
       <h2>Kapitel</h2>
+      ${prio && html`<p class="muted small prio-note"><span class="prio">★</span> = Priorität: besonders wichtige Varianten. Im Kurs sind sie mit „(P)“ markiert, beim Lernen kommen sie zuerst dran.</p>`}
       <div class="chapters">
         ${groups.map(g => html`${g.name !== '' || lessons.length > 0 ? html`<div class="lesson-head">${g.name || 'Weitere Kapitel'}
             <span class="muted small">${g.items.reduce((n, c) => n + c.learned, 0)} von ${g.items.reduce((n, c) => n + c.total, 0)} Zügen gelernt</span></div>` : null}
@@ -238,8 +247,8 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
             <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
             <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
           </div>
-          ${rep.videos && rep.videos[c.name] && html`<a class="btn ghost small" href=${rep.videos[c.name]} target="_blank" rel="noopener" title="Video zum Kapitel im Kurs ansehen">▶ Video</a>`}
           <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', c.i)}>Lernen</button>
+          ${rep.videos && rep.videos[c.name] && html`<a class="btn ghost small" href=${rep.videos[c.name]} target="_blank" rel="noopener" title="Video zum Kapitel im Kurs ansehen">▶ Video</a>`}
         </div>`)}`)}
       </div>
     </div>

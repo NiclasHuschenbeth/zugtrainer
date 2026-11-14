@@ -487,3 +487,7 @@ html[data-board="modern"] { --coord-light-sq: #5F7B8D; --coord-dark-sq: #FFFFFF;
 html[data-board="blue"] { --coord-light-sq: #5B6C8C; --coord-dark-sq: #FFFFFF; }
 html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; }
 @media (max-width: 520px) { .board-frame.inside { padding: 5px; } }
+
+/* Hinweise zur Kapitelliste und zum Lernstart */
+.prio-note { margin: 0 0 .6rem; }
+.from-row { margin-top: .9rem; }

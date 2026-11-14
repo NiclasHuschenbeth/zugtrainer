@@ -29,6 +29,23 @@ window.addEventListener('beforeinstallprompt', e => {
   window.dispatchEvent(new Event('zt-install'));
 });
 
+// Ansicht <-> Adresse (#/rep/<id>, #/train/<id>/learn/3, ...): "Zurück" und Neuladen führen zur selben Ansicht.
+const viewToHash = v => {
+  if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
+  if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + v.chapter : ''}`;
+  if (v.name === 'games' || v.name === 'compare') return `#/${v.name}`;
+  return '#/';
+};
+const hashToView = h => {
+  const [n, id, mode, ch] = h.replace(/^#\/?/, '').split('/');
+  if (['rep', 'edit', 'scrim'].includes(n) && id) return { name: n, repId: id, ...(n === 'rep' ? {} : { backTo: { name: 'rep', repId: id } }) };
+  if (n === 'train' && id && ['learn', 'review', 'keys'].includes(mode)) {
+    return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? +ch : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
+  }
+  if (n === 'games' || n === 'compare') return { name: n };
+  return { name: 'home' };
+};
+
 function App() {
   const [db, setDb] = useState(null);
   const [view, setView] = useState({ name: 'home' });
@@ -50,6 +67,7 @@ function App() {
   const again = useRef(false);
   const timer = useRef(null);
   const watching = useRef(false);
+  const routeReady = useRef(false);
 
   // patch: Objekt oder Funktion (aktueller Stand) => Objekt. opts.fromSync: Änderung stammt vom Abgleich selbst.
   const update = (p, opts = {}) => {
@@ -74,14 +92,19 @@ function App() {
       const seen = { ...(cur.settings.coursesSeen || {}) };
       const have = new Set(cur.repertoires.map(r => r.id));
       const add = [];
-      const videoPatch = {}; // Videolinks nachträglich an schon vorhandene Kurs-Repertoires hängen
+      const videoPatch = {}; // Videolinks und Farbe nachträglich an schon vorhandene Kurs-Repertoires übernehmen
       let changed = false;
       for (const row of rows) {
         const id = 'course-' + row.id;
         const hasVideos = row.videos && Object.keys(row.videos).length > 0;
         if (seen[row.id]) {
           const mine = cur.repertoires.find(r => r.id === id);
-          if (mine && hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) videoPatch[id] = row.videos;
+          if (mine) {
+            const p = {};
+            if (hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) p.videos = row.videos;
+            if (row.color && mine.color !== row.color) p.color = row.color;
+            if (Object.keys(p).length) videoPatch[id] = p;
+          }
           continue;
         }
         seen[row.id] = row.version || 1;
@@ -95,7 +118,7 @@ function App() {
       }
       if (!changed && !Object.keys(videoPatch).length) return;
       update(c => ({
-        repertoires: [...c.repertoires.map(r => (videoPatch[r.id] ? { ...r, videos: videoPatch[r.id], updatedAt: Date.now() } : r)), ...add],
+        repertoires: [...c.repertoires.map(r => (videoPatch[r.id] ? { ...r, ...videoPatch[r.id], updatedAt: Date.now() } : r)), ...add],
         ...(changed ? { settings: { ...c.settings, coursesSeen: seen, updatedAt: Date.now() } } : {}),
       }));
     } catch (err) {
@@ -182,12 +205,34 @@ function App() {
       dbRef.current = d;
       setDb(d);
       if (login && login.returnTo) setView(login.returnTo);
+      else if (/^#\//.test(location.hash)) {
+        const v = hashToView(location.hash);
+        if (v.name !== 'home') setView(v);
+      }
+      routeReady.current = true;
       if (maySignedIn()) {
         await watchAuth();
         const s = await currentSession().catch(() => null);
         if (s) setAccount(s);
       }
     })();
+  }, []);
+
+  // Jede neue Ansicht bekommt einen Eintrag im Browserverlauf
+  useEffect(() => {
+    if (!routeReady.current) return;
+    const h = viewToHash(view);
+    if (h !== (location.hash || '#/')) history.pushState(null, '', h);
+  }, [view]);
+
+  useEffect(() => {
+    const on = () => {
+      const h = location.hash;
+      if (h && !/^#\//.test(h)) return; // z. B. Anmelde-Antworten bleiben unberührt
+      setView(hashToView(h || '#/'));
+    };
+    window.addEventListener('popstate', on);
+    return () => window.removeEventListener('popstate', on);
   }, []);
 
   const doDelete = async () => {

@@ -119,16 +119,16 @@ export const DEPTHS = [5, 8, 10, 12, 15, 0]; // 0 = alle
 
 /** Zugnummer (ganzer Zug) des i-ten Zugs einer Linie. */
 const moveNo = (line, i) => parseInt((i ? line.nodes[i - 1].fen : line.startFen).split(' ')[5], 10) || 1;
-const inDepth = (line, i, depth) => !depth || moveNo(line, i) <= depth;
+const inDepth = (line, i, depth, from = 1) => (!depth || moveNo(line, i) <= depth) && moveNo(line, i) >= from;
 
-/** Anzahl neuer Züge, die bei dieser Tiefe (bis Zug N, 0 = alle) noch zu lernen sind. */
-export function freshCount(rep, progress, depth = 0, alts = false, scope = null) {
+/** Anzahl neuer Züge, die bei dieser Tiefe (bis Zug N, 0 = alle) und ab Zug `from` noch zu lernen sind. */
+export function freshCount(rep, progress, depth = 0, alts = false, scope = null, from = 1) {
   const seen = new Set();
   const sc = scopeChapters(rep, scope);
   for (const line of derived(rep).lines) {
     if (sc && !sc.has(line.chapter)) continue;
     line.keys.forEach((k, i) => {
-      if (k && !progress[k] && inDepth(line, i, depth) && (alts || !line.alt[i])) seen.add(k);
+      if (k && !progress[k] && inDepth(line, i, depth, from) && (alts || !line.alt[i])) seen.add(k);
     });
   }
   return seen.size;
@@ -194,7 +194,7 @@ export function buildTasks(rep, progress, mode, opts = {}) {
     const ask = [];
     line.keys.forEach((k, i) => {
       if (!k || seen.has(k)) return;
-      if (mode === 'learn' && !inDepth(line, i, opts.depth)) return;
+      if (mode === 'learn' && !inDepth(line, i, opts.depth, opts.from || 1)) return;
       if (!opts.alts && line.alt[i] && mode !== 'practice') return;
       const c = progress[k];
       if (mode === 'learn' ? !c : c && c.due <= now) ask.push(i);

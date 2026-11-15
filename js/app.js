@@ -421,7 +421,7 @@ function App() {
   } else if (view.name === 'games') {
     body = html`<${GamesView} db=${db} update=${update} />`;
   } else if (view.name === 'compare') {
-    body = html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} />`;
+    body = html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${id => setView({ name: 'rep', repId: id })} />`;
   } else {
     body = html`<${RepertoiresView}
       db=${db}
@@ -431,6 +431,7 @@ function App() {
       newRepertoire=${newRepertoire}
       train=${train}
       open=${repId => setView({ name: 'rep', repId })}
+      go=${go}
     />`;
   }
 
@@ -443,7 +444,7 @@ function App() {
       <nav>
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
         <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
-          <${MenuItem} title="Meine Partien auswerten" hint="Partien von Lichess und Chess.com laden und mit dem Repertoire abgleichen" onClick=${() => go('compare')} />
+          <${MenuItem} title="Meine Partien auswerten" hint="Partien von Lichess und Chess.com laden: Eröffnungsstatistik und Abgleich mit dem Repertoire" onClick=${() => go('compare')} />
         <//>
       </nav>
       <div class="top-right">

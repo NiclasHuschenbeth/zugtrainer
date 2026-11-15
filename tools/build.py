@@ -14,7 +14,8 @@ for base, dirs, names in os.walk(root):
         if rel.startswith('vendor/chessops/') and rel.split('/')[-1] in ('debug.js', 'index.js'):
             continue
         # Maia (Modell + Rechenprogramm, ca. 22 MB): nicht vorab laden, erst bei Gebrauch (eigener Speicher in sw.js)
-        if rel.startswith(('vendor/ort/', 'vendor/maia/')):
+        # Kurs-Cover: nur für die Empfehlung, erst bei Gebrauch laden
+        if rel.startswith(('vendor/ort/', 'vendor/maia/', 'icons/courses/')):
             continue
         files.append(rel)
 files.sort()

@@ -504,3 +504,16 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 .chapter-range { padding: .4rem 0 .9rem; border-top: 1px dashed var(--line); }
 .chapter-range .row { margin-bottom: .2rem; }
 .range-badge { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: 999px; background: var(--accent-soft, #E8EFF6); color: var(--primary); font-size: .72rem; font-weight: 700; }
+
+/* Repertoire-Empfehlung */
+.card.reco { flex-direction: row; gap: 16px; align-items: flex-start; border-left: 6px solid var(--accent); }
+.reco-cover { width: 200px; max-width: 38%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; flex: none; background: var(--panel2); }
+.reco-body { display: flex; flex-direction: column; gap: .45rem; min-width: 0; flex: 1; }
+.reco-body p { margin: 0; }
+.card.reco-hint { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; padding: 12px 18px; border-left: 6px solid var(--accent); }
+@media (max-width: 560px) {
+  .card.reco { flex-direction: column; }
+  .reco-cover { width: 100%; max-width: none; }
+}
+.grid2.wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
+.reco .link, .reco-hint .link { font-weight: 400; color: var(--muted); font-size: .85rem; }

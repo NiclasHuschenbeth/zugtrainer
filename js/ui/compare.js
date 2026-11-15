@@ -36,7 +36,7 @@ function drillKeys(rep, list, follow = 0) {
 
 const COLOR = { white: 'Weiß', black: 'Schwarz' };
 
-export function CompareView({ db, go, train, setSettings, update }) {
+export function CompareView({ db, go, train, setSettings, update, openRep }) {
   const s = db.settings;
   // Pro Farbe ein aktives Repertoire (gespeicherte Wahl, sonst das erste dieser Farbe)
   const active = color => {
@@ -44,7 +44,8 @@ export function CompareView({ db, go, train, setSettings, update }) {
     return mine.find(r => r.id === s.compare[color]) || mine[0] || null;
   };
   const reps = { white: active('white'), black: active('black') };
-  const [side, setSide] = useState(reps.white ? 'white' : 'black');
+  const [side, setSide] = useState(reps.white || !reps.black ? 'white' : 'black');
+  const stats = color => html`<${StatsView} games=${db.games} color=${color} db=${db} setSettings=${setSettings} openRep=${openRep} />`;
   const [tab, setTab] = useState('you');
   const [sel, setSel] = useState(null);
   const rep = reps[side];
@@ -55,18 +56,26 @@ export function CompareView({ db, go, train, setSettings, update }) {
     setSel(null);
   };
 
-  if (!db.repertoires.length) {
-    return html`<div class="card center">
-      <h2>Meine Partien auswerten</h2>
-      <p class="muted">Dafür brauchst du zuerst mindestens ein Repertoire.</p>
-      <div class="row center"><button class="btn primary" onClick=${() => go('home')}>Repertoire hochladen</button></div>
-    </div>`;
-  }
   if (!db.games.length) {
     return html`<div class="stack">
       <h1>Meine Partien auswerten</h1>
-      <p class="muted">Schritt 1: Lade deine Partien. Danach siehst du hier sofort, wo du von deinem Repertoire abgewichen bist und welche Gegnerzüge dir noch fehlen.</p>
+      <p class="muted">Schritt 1: Lade deine Partien. Danach siehst du hier sofort, in welchen Eröffnungen es gut oder schlecht läuft${db.repertoires.length ? ', wo du von deinem Repertoire abgewichen bist und welche Gegnerzüge dir noch fehlen' : ''}.</p>
       <${GamesView} db=${db} update=${update} embedded=${true} />
+    </div>`;
+  }
+  // Ohne Repertoire: nur die Eröffnungsstatistik (der Abgleich mit dem Repertoire kommt dazu, sobald eines da ist)
+  if (!db.repertoires.length) {
+    return html`<div class="stack">
+      <h1>Meine Partien auswerten</h1>
+      <p class="muted">So schneidest du in deinen Eröffnungen ab. Mit einem eigenen Repertoire siehst du hier zusätzlich, wo du davon abgewichen bist. <button class="link" onClick=${() => go('home')}>Repertoire hochladen</button></p>
+      <div class="tabs">
+        ${['white', 'black'].map(c => html`<button class=${side === c ? 'on' : ''} onClick=${() => setSide(c)}>Mit ${COLOR[c]} (${gamesAs(c)})</button>`)}
+      </div>
+      ${stats(side)}
+      <details class="card load-games">
+        <summary>${db.games.length} Partien geladen – weitere laden oder aktualisieren</summary>
+        <${GamesView} db=${db} update=${update} embedded=${true} />
+      </details>
     </div>`;
   }
 
@@ -93,7 +102,8 @@ export function CompareView({ db, go, train, setSettings, update }) {
 
   if (!rep) {
     return html`<div class="stack">${head}
-      <div class="card center muted">Für ${COLOR[side]} ist noch kein Repertoire vorhanden.</div>
+      <div class="card center muted">Für ${COLOR[side]} ist noch kein Repertoire vorhanden. Die Eröffnungsstatistik siehst du trotzdem:</div>
+      ${stats(side)}
     </div>`;
   }
 
@@ -124,7 +134,7 @@ export function CompareView({ db, go, train, setSettings, update }) {
         </div>
 
         ${tab === 'stats'
-          ? html`<${StatsView} games=${db.games} color=${side} />`
+          ? stats(side)
           : tab === 'games'
           ? html`<${GameTable} rows=${data.rows} />`
           : !list.length

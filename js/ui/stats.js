@@ -1,5 +1,6 @@
 import { html, useEffect, useMemo, useState } from 'preact';
 import { germanName, loadOpenings, openingStats, variationOf } from '../lib/openings.js';
+import { RecoCards } from './reco.js';
 
 const MIN_GAMES = 5;
 const pct = x => `${Math.round(x * 100)} %`;
@@ -20,7 +21,7 @@ function Row({ e, label, open, onClick, sub }) {
 }
 
 /** Eröffnungsstatistik: gegen welche Eröffnungen läuft es gut, wo gibt es Probleme? */
-export function StatsView({ games, color }) {
+export function StatsView({ games, color, db, setSettings, openRep }) {
   const [map, setMap] = useState(null);
   const [openName, setOpenName] = useState(null);
   useEffect(() => {
@@ -38,7 +39,7 @@ export function StatsView({ games, color }) {
 
   return html`<div class="stack">
     <p class="muted small">Score = Siege plus halbe Remis, geteilt durch alle Partien. Probleme und Stärken werden erst ab ${MIN_GAMES} Partien einer Eröffnung gezeigt, damit Zufall nicht zählt.${st.unknown > 0 ? ` ${st.unknown} von ${mine.length} Partien konnten keiner Eröffnung zugeordnet werden.` : ''}</p>
-    <div class="grid2">
+    <div class="grid2 wide">
       <div class="card">
         <h3 class="flat">Hier hast du Schwierigkeiten</h3>
         ${weak.length ? weak.map(e => html`<${Row} e=${e} label=${germanName(e.name)} />`) : html`<p class="muted small">Keine Eröffnung mit mindestens ${MIN_GAMES} Partien und einem Score unter 45 %.</p>`}
@@ -48,6 +49,7 @@ export function StatsView({ games, color }) {
         ${strong.length ? strong.map(e => html`<${Row} e=${e} label=${germanName(e.name)} />`) : html`<p class="muted small">Keine Eröffnung mit mindestens ${MIN_GAMES} Partien und einem Score ab 55 %.</p>`}
       </div>
     </div>
+    ${db && html`<${RecoCards} games=${games} color=${color} db=${db} setSettings=${setSettings} openRep=${openRep} />`}
     <div class="card">
       <h3 class="flat">Alle Eröffnungen (${st.list.length})</h3>
       <div class="muted small">Klicke eine Eröffnung an, um die Varianten zu sehen.</div>

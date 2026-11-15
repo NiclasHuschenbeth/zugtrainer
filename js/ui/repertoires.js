@@ -5,6 +5,7 @@ import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
 import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
 import { RangeSlider, rangeLabel } from './rangeslider.js';
+import { HomeReco } from './reco.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -79,7 +80,7 @@ function Home({ db, setGoal, train }) {
   </div>`;
 }
 
-export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open }) {
+export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go }) {
   const reps = color => db.repertoires.filter(r => r.color === color);
   const hasProgress = Object.values(db.progress).some(p => Object.keys(p).length > 0);
   const onboarding = !db.settings.onboarded && !db.sync.last;
@@ -101,6 +102,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
   return html`<div class="stack">
     ${showInstall && html`<${InstallHint} dismiss=${() => setSettings({ installHint: 'dismissed' })} />`}
     ${db.repertoires.length > 0 && html`<${Home} db=${db} setGoal=${setGoal} train=${train} />`}
+    <${HomeReco} db=${db} setSettings=${setSettings} go=${go} />
     <${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${db.repertoires.length > 0} />
     ${db.repertoires.length === 0 && html`<p class="muted center">Noch kein Repertoire vorhanden. Lade eine PGN-Datei hoch oder probiere das Beispiel aus.</p>`}
     ${group('Repertoires mit Weiß', reps('white'))}

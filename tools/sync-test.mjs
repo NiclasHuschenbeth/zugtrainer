@@ -122,6 +122,26 @@ export async function run() {
   await C.sync(S2, 51000);
   ok(S2.reps.size === 1 && S2.cards.size === 1, '9) Lokale Daten werden beim ersten Abgleich ins Konto übernommen');
 
+  // 10) Kurs-Repertoires: Inhalt bleibt auf dem Gerät, nur der Lernfortschritt wird abgeglichen
+  const S3 = fakeServer();
+  const D = device('D');
+  const E = device('E');
+  const K = 'course-473844-basis';
+  D.db.repertoires = [rep(K, 'Kurs', 60000)];
+  D.db.progress = { [K]: { 'k|e4': card(2, 60100) } };
+  await D.sync(S3, 61000);
+  ok(S3.reps.size === 0 && S3.cards.size === 1, '10) Kurs wird nicht hochgeladen, seine Karte schon');
+  await E.sync(S3, 62000); // E kennt den Kurs noch nicht
+  ok(E.db.repertoires.length === 0, '10) Kurs kommt nicht über den Abgleich');
+  E.update(cur => ({ repertoires: [rep(K, 'Kurs', 62500)], sync: { ...cur.sync, cardsPull: 0 } })); // wie preloadCourses
+  await E.sync(S3, 63000);
+  ok((E.db.progress[K] || {})['k|e4'] && E.db.progress[K]['k|e4'].level === 2, '10) Lernfortschritt des Kurses kommt auf dem zweiten Gerät an');
+  D.update(cur => ({ repertoires: [], progress: {}, settings: { ...cur.settings, coursesRemoved: { '473844-basis': true }, updatedAt: 64000 } }));
+  await D.sync(S3, 65000);
+  await E.sync(S3, 66000);
+  ok(E.db.settings.coursesRemoved && E.db.settings.coursesRemoved['473844-basis'] === true, '10) Gelöschter Kurs ist auf dem anderen Gerät vermerkt');
+  ok(S3.reps.size === 0, '10) Auch nach dem Löschen liegt kein Kurs im Konto');
+
   const failed = results.filter(x => !x.ok);
   return { passed: results.length - failed.length, total: results.length, failed, all: results.map(x => (x.ok ? '✓ ' : '✗ ') + x.msg) };
 }

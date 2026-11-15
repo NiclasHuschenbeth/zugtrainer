@@ -16,9 +16,9 @@ import { setBoardPrefs } from './ui/board.js';
 import { BoardSettings } from './ui/boardsettings.js';
 import { CONFIG } from './config.js';
 import { AccountDialog } from './ui/account.js';
-import { cloudEnabled, currentSession, deleteAccount, fetchCourses, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
+import { cloudEnabled, currentSession, deleteAccount, fetchCourses, fetchCourseVersions, maySignedIn, onAuthChange, sendLoginLink, signOut, supabaseRemote, verifyCode } from './lib/cloud.js';
 import { parseRepertoirePgn } from './lib/repertoire.js';
-import { emptySync, runSync } from './lib/sync.js';
+import { emptySync, isCourseId, runSync } from './lib/sync.js';
 
 const SYNC_KEYS = ['repertoires', 'progress', 'activity', 'settings', 'sync'];
 
@@ -84,54 +84,73 @@ function App() {
     timer.current = setTimeout(doSync, ms);
   };
 
-  /** Freigeschaltete Kurse (Ablefy) einmalig als Repertoire anlegen. Wer ein Repertoire löscht, bekommt es nicht erneut (settings.coursesSeen). */
+  /**
+   * Freigeschaltete Kurse (Ablefy) als Repertoire `course-<id>` auf diesem Gerät anlegen und aktuell halten.
+   * Der Kursinhalt wird nicht ins Konto kopiert (siehe sync.js); abgeglichen werden nur der Lernfortschritt und
+   * die Liste der vom Nutzer gelöschten Kurse (settings.coursesRemoved), damit sie nicht wiederkommen.
+   */
   const preloadCourses = async () => {
     try {
-      const rows = await fetchCourses();
+      // Erst nur die Versionsnummern holen; den Kursinhalt (mehrere MB) nur für neue oder geänderte Kurse.
+      // Deshalb gilt: jede Änderung an einem Kurs in der Datenbank braucht version + 1.
+      const list = await fetchCourseVersions();
       const cur = dbRef.current;
-      const seen = { ...(cur.settings.coursesSeen || {}) };
-      const have = new Set(cur.repertoires.map(r => r.id));
+      const removed = cur.settings.coursesRemoved || {};
+      const oldSeen = cur.settings.coursesSeen || {}; // frühere Fassung: Versionsstand stand in den Einstellungen
+      const localVersion = (r, courseId) => r.courseVersion || (typeof oldSeen[courseId] === 'number' ? oldSeen[courseId] : 1);
+      const mineOf = courseId => cur.repertoires.find(r => r.id === 'course-' + courseId);
+      const need = list
+        .filter(r => {
+          if (removed[r.id]) return false;
+          const mine = mineOf(r.id);
+          return !mine || (r.version || 1) > localVersion(mine, r.id);
+        })
+        .map(r => r.id);
+      if (!need.length) return;
+      const rows = await fetchCourses(need);
       const add = [];
-      const videoPatch = {}; // Videolinks und Farbe nachträglich an schon vorhandene Kurs-Repertoires übernehmen
-      let changed = false;
+      const patch = {}; // Änderungen an schon vorhandenen Kurs-Repertoires (Struktur und Lernstand bleiben)
       for (const row of rows) {
         const id = 'course-' + row.id;
+        const version = row.version || 1;
         const hasVideos = row.videos && Object.keys(row.videos).length > 0;
-        if (seen[row.id]) {
-          const mine = cur.repertoires.find(r => r.id === id);
-          if (mine) {
-            const p = {};
-            // Neue Kursversion: Kapiteltitel aus dem aktuellen PGN übernehmen (Struktur und Lernstand bleiben)
-            if ((row.version || 1) > (typeof seen[row.id] === 'number' ? seen[row.id] : 1)) {
-              const fresh = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
-              if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
-                p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
-              }
-              seen[row.id] = row.version || 1;
-              changed = true;
-            }
-            if (hasVideos && JSON.stringify(mine.videos || {}) !== JSON.stringify(row.videos)) p.videos = row.videos;
-            if (row.color && mine.color !== row.color) p.color = row.color;
-            // Lösungstexte der Schlüsselstellungen aktuell halten (kommen vom Kurs, nicht vom Nutzer)
-            if (row.key_solutions && Object.keys(row.key_solutions).length && JSON.stringify(mine.keySolutions || {}) !== JSON.stringify(row.key_solutions)) p.keySolutions = row.key_solutions;
-            if (Object.keys(p).length) videoPatch[id] = p;
-          }
+        const hasKeys = row.key_solutions && Object.keys(row.key_solutions).length > 0;
+        const fresh = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
+        const mine = mineOf(row.id);
+        if (!mine) {
+          if (!fresh.length) continue;
+          add.push({
+            id,
+            name: row.name,
+            color: row.color,
+            chapters: fresh,
+            ...(hasKeys ? { keySolutions: row.key_solutions } : {}),
+            ...(hasVideos ? { videos: row.videos } : {}),
+            courseVersion: version,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
           continue;
         }
-        seen[row.id] = row.version || 1;
-        changed = true;
-        if (have.has(id)) continue;
-        const chapters = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
-        if (!chapters.length) continue;
-        const ks = row.key_solutions && Object.keys(row.key_solutions).length ? { keySolutions: row.key_solutions } : {};
-        const vd = hasVideos ? { videos: row.videos } : {};
-        add.push({ id, name: row.name, color: row.color, chapters, ...ks, ...vd, createdAt: Date.now(), updatedAt: Date.now() });
+        const p = { courseVersion: version };
+        if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
+          p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
+        }
+        if (hasVideos) p.videos = row.videos;
+        if (row.color) p.color = row.color;
+        if (hasKeys) p.keySolutions = row.key_solutions; // Lösungstexte kommen vom Kurs, nicht vom Nutzer
+        patch[id] = p;
       }
-      if (!changed && !Object.keys(videoPatch).length) return;
-      update(c => ({
-        repertoires: [...c.repertoires.map(r => (videoPatch[r.id] ? { ...r, ...videoPatch[r.id], updatedAt: Date.now() } : r)), ...add],
-        ...(changed ? { settings: { ...c.settings, coursesSeen: seen, updatedAt: Date.now() } } : {}),
-      }));
+      if (!add.length && !Object.keys(patch).length) return;
+      update(c => {
+        const have = new Set(c.repertoires.map(r => r.id));
+        const fresh = add.filter(r => !have.has(r.id));
+        return {
+          repertoires: [...c.repertoires.map(r => (patch[r.id] ? { ...r, ...patch[r.id], updatedAt: Date.now() } : r)), ...fresh],
+          // Neu angelegte Kurse: den Lernfortschritt aus dem Konto beim nächsten Abgleich vollständig nachladen
+          ...(fresh.length ? { sync: { ...c.sync, cardsPull: 0 } } : {}),
+        };
+      });
     } catch (err) {
       console.warn('Kurse konnten nicht geladen werden', err);
     }
@@ -316,6 +335,11 @@ function App() {
     update(cur => {
       const progress = { ...cur.progress };
       delete progress[id];
+      // Gelöschter Kurs: merken, damit er auf keinem Gerät wieder angelegt wird (wird mit den Einstellungen abgeglichen)
+      if (isCourseId(id)) {
+        const coursesRemoved = { ...(cur.settings.coursesRemoved || {}), [id.slice('course-'.length)]: true };
+        return { repertoires: cur.repertoires.filter(r => r.id !== id), progress, settings: { ...cur.settings, coursesRemoved, updatedAt: Date.now() } };
+      }
       return {
         repertoires: cur.repertoires.filter(r => r.id !== id),
         progress,

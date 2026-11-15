@@ -100,9 +100,15 @@ const must = ({ data, error }) => {
 };
 
 /** Kurse, die dem angemeldeten Nutzer freigeschaltet sind (Ablefy-Kauf, siehe tools/supabase-courses.sql). */
-export async function fetchCourses() {
+export async function fetchCourses(ids) {
   const c = await getClient();
-  return must(await c.from('courses').select('id,name,color,version,pgn,key_solutions,videos'));
+  return must(await c.from('courses').select('id,name,color,version,pgn,key_solutions,videos').in('id', ids));
+}
+
+/** Nur Kennung und Versionsnummer der freigeschalteten Kurse (klein; läuft bei jedem Abgleich). */
+export async function fetchCourseVersions() {
+  const c = await getClient();
+  return must(await c.from('courses').select('id,version'));
 }
 
 /** Server-Seite des Abgleichs auf Basis von Supabase. */

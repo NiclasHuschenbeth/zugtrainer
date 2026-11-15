@@ -7,13 +7,17 @@
 //   Repertoires:     der zuletzt gespeicherte Stand; wurde dasselbe Repertoire auf zwei Geräten
 //                    seit dem letzten Abgleich geändert, bleibt der ältere Stand als Kopie erhalten.
 //   Gelöschtes:      wird als gelöscht markiert (sonst käme es vom anderen Gerät zurück).
+//   Kurse:           der Kursinhalt bleibt auf dem Gerät, nur der Lernfortschritt wird abgeglichen.
 
-export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded', 'depth', 'from', 'ranges', 'alts', 'drillFollow', 'scopes', 'keyScopes', 'keySize', 'keyShuffle', 'boardTheme', 'boardSize', 'showDests', 'anim', 'tempo', 'moveInput', 'coords', 'coursesSeen'];
+export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded', 'depth', 'from', 'ranges', 'alts', 'drillFollow', 'scopes', 'keyScopes', 'keySize', 'keyShuffle', 'boardTheme', 'boardSize', 'showDests', 'anim', 'tempo', 'moveInput', 'coords', 'coursesRemoved'];
 const DAY = 86400000;
 const BATCH = 500;
 
 export const emptySync = () => ({ userId: null, last: 0, cardsPull: 0, cardsPushed: 0, tombstones: {} });
 export const repTime = r => r.updatedAt || r.createdAt || 1;
+// Kurs-Repertoires (gekaufte Kurse) werden nie ins Konto kopiert: jedes Gerät holt den Inhalt aus der Kurs-Tabelle
+// (preloadCourses in app.js). Abgeglichen wird nur ihr Lernfortschritt (Karten).
+export const isCourseId = id => String(id).startsWith('course-');
 const cardTime = c => (c && c.at) || 1;
 
 const pickSettings = s => {
@@ -29,7 +33,7 @@ export function planDownloads(cur, meta) {
   const tomb = cur.sync.tombstones || {};
   const need = [];
   for (const m of meta) {
-    if (m.deleted) continue;
+    if (m.deleted || isCourseId(m.id)) continue;
     const l = local.get(m.id);
     if (tomb[m.id] !== undefined) {
       if (tomb[m.id] < m.updated_at) need.push(m.id);
@@ -53,6 +57,7 @@ export function merge(cur, snap, now, newId = () => crypto.randomUUID()) {
   const byId = () => new Map(reps.map(r => [r.id, r]));
 
   for (const m of snap.meta) {
+    if (isCourseId(m.id)) continue;
     const l = byId().get(m.id);
     if (m.deleted) {
       if (l && repTime(l) <= m.updated_at) {
@@ -91,11 +96,11 @@ export function merge(cur, snap, now, newId = () => crypto.randomUUID()) {
   }
   // Lokal vorhanden, auf dem Server unbekannt
   for (const l of cur.repertoires) {
-    if (metaById.has(l.id)) continue;
+    if (metaById.has(l.id) || isCourseId(l.id)) continue;
     if (tomb[l.id] !== undefined) delete tomb[l.id]; // lokal gelöscht, nie hochgeladen
     else push.reps.push(l);
   }
-  for (const id of Object.keys(tomb)) if (!metaById.has(id)) delete tomb[id];
+  for (const id of Object.keys(tomb)) if (!metaById.has(id) || isCourseId(id)) delete tomb[id];
 
   // Lernfortschritt: je Karte die zuletzt abgefragte Version
   const known = new Set(reps.map(r => r.id));

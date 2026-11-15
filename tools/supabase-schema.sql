@@ -3,7 +3,7 @@
 
 create table if not exists public.repertoires (
   user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  id         uuid not null,
+  id         text not null,   -- eigene Repertoires: UUID; Kurs-Repertoires ('course-...') werden nicht hochgeladen
   data       jsonb,
   updated_at bigint not null,
   deleted    boolean not null default false,
@@ -12,7 +12,7 @@ create table if not exists public.repertoires (
 
 create table if not exists public.cards (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  rep_id  uuid not null,
+  rep_id  text not null,      -- UUID oder 'course-<Kurs>' (Lernfortschritt gekaufter Kurse)
   key     text not null,
   level   integer not null,
   due     bigint not null,
@@ -43,6 +43,10 @@ create policy own_rows on public.cards for all to authenticated
   using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 create policy own_rows on public.profiles for all to authenticated
   using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+-- Bestehende Datenbank (15.11.2026): Kennungen von uuid auf text umgestellt
+-- alter table public.cards alter column rep_id type text;
+-- alter table public.repertoires alter column id type text;
 
 -- Nur angemeldete Nutzer, nie anonyme Besucher
 revoke all on public.repertoires, public.cards, public.profiles from anon;

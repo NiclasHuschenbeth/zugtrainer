@@ -9,7 +9,8 @@ Eröffnungsrepertoires lernen, wiederholen und mit den eigenen Online-Partien ab
 - **Abgleich:** erste Abweichung vom Repertoire pro Partie; eigene Fehler lassen sich direkt trainieren.
 - **Editor:** Züge, Varianten, Kommentare, Zug- und Stellungsbewertungen, Pfeile, Kapitel (auch aus FEN/PGN), PGN-Export,
   Stockfish 19, Cloud-Bewertungen (ChessDB), Lichess-Eröffnungsdatenbank, Musterpartien, Abdeckungsprüfung.
-- **Testpartie:** Repertoire gegen Gegnerzüge nach echter Häufigkeit (Lichess) oder gegen Stockfish spielen; die Engine bewertet am Ende.
+- **Testpartie:** Repertoire gegen Gegnerzüge nach echter Häufigkeit (Lichess), gegen Maia (Netz, das wie ein Mensch einer
+  gewählten Spielstärke zieht; läuft im Browser) oder gegen Stockfish spielen; die Engine bewertet am Ende.
 - **Offline:** Nach dem ersten Laden funktioniert alles ohne Internet, was keine fremden Dienste braucht. Als App installierbar (PWA).
 
 Alle Daten (Repertoires, Fortschritt, Partien) liegen zunächst nur im Browser des Nutzers (IndexedDB). Mit einem kostenlosen
@@ -59,3 +60,6 @@ GPL-3.0, siehe `LICENSE`. Der Zugtrainer nutzt
 [chessground](https://github.com/lichess-org/chessground) und [chessops](https://github.com/niklasf/chessops) (GPL-3.0),
 [Stockfish.js](https://github.com/nmrugg/stockfish.js) (GPL-3.0), [Preact](https://preactjs.com) und htm (MIT / Apache-2.0)
 sowie @badrap/result (MIT). Wer die Seite veröffentlicht, muss den Quelltext zugänglich machen.
+
+Der Gegner „Maia“ nutzt das Netz [Maia3-5M](https://github.com/CSSLab/maia3) (AGPL-3.0, siehe `vendor/maia/README.txt`)
+und [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) (MIT, `vendor/ort/`).

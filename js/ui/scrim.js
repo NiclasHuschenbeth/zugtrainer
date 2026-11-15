@@ -1,4 +1,6 @@
 // Testpartie: das Repertoire gegen Gegnerzüge spielen, die nach echter Häufigkeit gezogen werden.
+// Gegner: Lichess-Datenbank (echte Partien), Maia (Netz, das wie ein Mensch einer Spielstärke zieht) oder Stockfish.
+// Liefert die Datenbank keinen Zug mehr, spielt Maia weiter; ist Maia nicht ladbar (z. B. offline), Stockfish.
 // Verlässt die Partie die Vorbereitung, folgen ein paar freie Züge, dann bewertet Stockfish die Stellung.
 import { html, useEffect, useReducer, useRef } from 'preact';
 import { de } from '../lib/repertoire.js';
@@ -10,10 +12,14 @@ import { derived, epdOf, moveKeys, moveLabel, posFromFen, turnOf } from '../lib/
 import { StockfishEngine, formatScore } from '../lib/engine.js';
 import { PRESETS, explore, startLogin } from '../lib/lichess.js';
 import { locate } from '../lib/coverage.js';
+import { MAIA_DEFAULT, MAIA_LEVELS, loadMaia, maiaPick } from '../lib/maia.js';
 import { sounds } from '../lib/sound.js';
 import { Board } from './board.js';
 
 const FREE_MOVES = 3;
+// Maia-Spielstärke, wenn die Lichess-Datenbank zu Ende ist: passend zum gewählten Bereich
+const PRESET_ELO = { low: 1200, mid: 1600, high: 2000, top: 2400, masters: 2400 };
+let maiaReady = false;
 const DEPTH = 14;
 const VERDICT = {
   won: { label: 'Gewonnen', cls: 'ok' },
@@ -77,6 +83,7 @@ class Game {
     this.result = null;
     this.arrow = null;
     this.thinking = false;
+    this.loadingMaia = false;
     this.sync();
     this.step();
   }
@@ -128,14 +135,35 @@ class Game {
     this.left = left;
   }
 
+  /** Zug von Maia (lädt das Netz beim ersten Mal). -> { move, share } | null, wenn Maia nicht verfügbar ist */
+  async maia(fen, elo) {
+    const run = this.run;
+    try {
+      if (!maiaReady) {
+        this.loadingMaia = true;
+        this.sync();
+        await loadMaia();
+        maiaReady = true;
+      }
+      const m = await maiaPick(fen, elo);
+      return m ? { move: m.move, share: m.p } : null;
+    } catch (err) {
+      console.warn('Maia nicht verfügbar', err);
+      return null;
+    } finally {
+      if (run === this.run) this.loadingMaia = false;
+    }
+  }
+
   async opponent() {
     const run = this.run;
     const fen = this.fen;
     this.thinking = true;
     this.sync();
-    const { preset, token } = this.opts();
+    const { preset, token, maiaElo } = this.opts();
     let pick = null;
-    try {
+    if (preset === 'maia') pick = await this.maia(fen, maiaElo || MAIA_DEFAULT);
+    else try {
       if (preset === 'sf') throw new Error('Stockfish als Gegner');
       const data = await explore(fen, preset, token);
       const total = data.white + data.draws + data.black;
@@ -152,8 +180,10 @@ class Game {
         return;
       }
     }
+    // keine Partien mehr in der Datenbank: Maia spielt menschlich weiter
+    if (!pick && preset !== 'sf' && preset !== 'maia' && run === this.run) pick = await this.maia(fen, PRESET_ELO[preset] || maiaElo || MAIA_DEFAULT);
     if (!pick) {
-      // keine Partien mehr in der Datenbank: Stockfish spielt weiter
+      // Stockfish als Gegner gewählt oder Maia nicht verfügbar
       // Etwas Abwechslung: zufällig einer der Züge, die höchstens 0,3 schlechter sind als der beste.
       const lines = (await this.judge.eval(fen)) || [];
       const sign = turnOf(fen) === 'white' ? 1 : -1;
@@ -256,8 +286,9 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
   const token = settings.lichessToken;
   const optsRef = useRef(null);
   const opp = settings.opponent || (token ? settings.explorer : 'sf');
-  const needLogin = opp !== 'sf' && !token;
-  optsRef.current = { preset: opp, token, sound: settings.sound };
+  const needLogin = opp !== 'sf' && opp !== 'maia' && !token;
+  const maiaElo = settings.maiaElo || MAIA_DEFAULT;
+  optsRef.current = { preset: opp, token, sound: settings.sound, maiaElo };
   const gradeRef = useRef(onGrade);
   gradeRef.current = onGrade;
   const game = useRef(null);
@@ -283,7 +314,8 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
       <p class="muted">In der Testpartie spielst du dein Repertoire gegen Züge, die echte Gegner auf Lichess in der jeweiligen Stellung spielen. Dafür braucht der Zugtrainer die Lichess-Partiendatenbank, und die gibt Lichess nur für angemeldete Nutzer frei. Der Zugtrainer erhält dabei keine Rechte auf deinem Konto.</p>
       <div class="row">
         <button class="btn primary" onClick=${() => startLogin({ name: 'scrim', repId: rep.id })}>Mit Lichess anmelden</button>
-        <button class="btn" onClick=${() => setSettings({ opponent: 'sf' })}>Stattdessen gegen Stockfish spielen</button>
+        <button class="btn" onClick=${() => setSettings({ opponent: 'maia' })}>Ohne Anmeldung gegen Maia spielen (zieht wie ein Mensch)</button>
+        <button class="btn" onClick=${() => setSettings({ opponent: 'sf' })}>Gegen Stockfish spielen</button>
         <button class="btn ghost" onClick=${onExit}>Zurück</button>
       </div>
     </div>`;
@@ -307,7 +339,7 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
       ${r.verdict === 'held' && html`<p>Du stehst etwas schlechter, aber noch im Rahmen.</p>`}
       ${r.verdict === 'lost' && left && left.type !== 'forgot' && html`<p>Nach der Vorbereitung ist die Stellung deutlich schlechter geworden.</p>`}
     </div>`;
-  } else if (g.thinking) status = html`<div class="msg idle">Gegner zieht …</div>`;
+  } else if (g.thinking) status = html`<div class="msg idle">${g.loadingMaia ? 'Maia wird geladen (einmalig ca. 22 MB) …' : 'Gegner zieht …'}</div>`;
   else if (g.phase === 'free') status = html`<div class="msg ask"><b>Raus aus der Vorbereitung.</b> Spiele noch ${g.freeLeft} ${g.freeLeft === 1 ? 'Zug' : 'Züge'} – dann wird die Stellung bewertet.</div>`;
   else status = html`<div class="msg ask">Du bist am Zug. Spiele, was in deinem Repertoire steht.</div>`;
 
@@ -327,9 +359,15 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
       <label class="small">Gegner
         <select value=${opp} onChange=${e => setSettings({ opponent: e.target.value })}>
           ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label}</option>`)}
+          <option value="maia">Maia (zieht wie ein Mensch, ohne Anmeldung)</option>
           <option value="sf">Stockfish (Computer, ohne Anmeldung)</option>
         </select>
       </label>
+      ${opp === 'maia' && html`<label class="small">Spielstärke
+        <select value=${maiaElo} onChange=${e => setSettings({ maiaElo: +e.target.value })}>
+          ${MAIA_LEVELS.map(l => html`<option value=${l}>ca. ${l} (Lichess-Wertung)</option>`)}
+        </select>
+      </label>`}
       <div class="status">${status}</div>
       ${g && g.moves.length > 0 && html`<div class="tree">${de(g.moves.join(' '))}</div>`}
       <div class="row trainer-actions">

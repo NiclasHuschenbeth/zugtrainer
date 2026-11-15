@@ -13,6 +13,9 @@ for base, dirs, names in os.walk(root):
             continue
         if rel.startswith('vendor/chessops/') and rel.split('/')[-1] in ('debug.js', 'index.js'):
             continue
+        # Maia (Modell + Rechenprogramm, ca. 22 MB): nicht vorab laden, erst bei Gebrauch (eigener Speicher in sw.js)
+        if rel.startswith(('vendor/ort/', 'vendor/maia/')):
+            continue
         files.append(rel)
 files.sort()
 h = hashlib.sha1()

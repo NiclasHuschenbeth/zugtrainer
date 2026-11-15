@@ -1,6 +1,6 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = '852c23350b';
+const VERSION = '4bfaacbfeb';
 const FILES = [
   "./",
   ".gitignore",
@@ -22,6 +22,7 @@ const FILES = [
   "js/lib/engine.js",
   "js/lib/games.js",
   "js/lib/lichess.js",
+  "js/lib/maia.js",
   "js/lib/openings-data.js",
   "js/lib/openings.js",
   "js/lib/pgnexport.js",
@@ -72,6 +73,10 @@ const FILES = [
   "vendor/supabase/supabase.js"
 ];
 const CACHE = `zugtrainer-${VERSION}`;
+// Große Dateien (Maia): erst bei Gebrauch geladen und über neue Versionen hinweg behalten.
+// Bei einem neuen Modell oder Rechenprogramm die Nummer erhöhen.
+const BIG = 'zugtrainer-gross-1';
+const isBig = path => path.includes('/vendor/ort/') || path.includes('/vendor/maia/');
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -86,7 +91,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches
       .keys()
-      .then(keys => Promise.all(keys.filter(k => k.startsWith('zugtrainer-') && k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('zugtrainer-') && k !== CACHE && k !== BIG).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -96,6 +101,11 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
   // Fremde Dienste (Lichess, Chess.com, ChessDB) laufen immer direkt übers Netz.
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  if (isBig(url.pathname)) {
+    event.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || fetchAndStore(req, BIG)));
+    return;
+  }
 
   // Bibliotheken und Stockfish ändern sich nur mit neuer Version: zuerst aus dem Speicher.
   if (url.pathname.includes('/vendor/') || url.pathname.includes('/icons/')) {
@@ -111,10 +121,10 @@ self.addEventListener('fetch', event => {
   );
 });
 
-async function fetchAndStore(req) {
+async function fetchAndStore(req, name = CACHE) {
   const res = await fetch(req);
   if (res.ok) {
-    const cache = await caches.open(CACHE);
+    const cache = await caches.open(name);
     cache.put(req, res.clone());
   }
   return res;

@@ -285,7 +285,8 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
   const [, force] = useReducer(x => x + 1, 0);
   const token = settings.lichessToken;
   const optsRef = useRef(null);
-  const opp = settings.opponent || (token ? settings.explorer : 'sf');
+  // Ohne eigene Wahl: mit Lichess-Anmeldung die Datenbank, sonst Maia (zieht wie ein Mensch, braucht keine Anmeldung)
+  const opp = settings.opponent || (token ? settings.explorer : 'maia');
   const needLogin = opp !== 'sf' && opp !== 'maia' && !token;
   const maiaElo = settings.maiaElo || MAIA_DEFAULT;
   optsRef.current = { preset: opp, token, sound: settings.sound, maiaElo };

@@ -11,7 +11,7 @@ function useReco(db, colors) {
   const hidden = db.settings.recoHidden;
   return useMemo(() => {
     if (!catalog) return [];
-    const owned = new Set(db.repertoires.filter(r => String(r.id).startsWith('course-')).map(r => r.id.slice('course-'.length)));
+    const owned = new Set(db.repertoires.filter(r => String(r.id).startsWith('course-') && !r.locked && !r.lock).map(r => r.id.slice('course-'.length)));
     return colors.flatMap(color => recommend(db.games, color, catalog, { owned, hidden: hidden || {} }));
   }, [catalog, db.games, db.repertoires, hidden, colors.join()]);
 }

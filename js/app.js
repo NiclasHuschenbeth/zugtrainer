@@ -101,17 +101,29 @@ function App() {
       const oldSeen = cur.settings.coursesSeen || {}; // frühere Fassung: Versionsstand stand in den Einstellungen
       const localVersion = (r, courseId) => r.courseVersion || (typeof oldSeen[courseId] === 'number' ? oldSeen[courseId] : 1);
       const mineOf = courseId => cur.repertoires.find(r => r.id === 'course-' + courseId);
+      // Kurse, die nicht mehr freigeschaltet sind (Erstattung, Entzug, Ablauf): Inhalt vom Gerät löschen, Lernstand bleibt.
+      // Das passiert nur hier, also nur wenn der Server die Liste wirklich geliefert hat (nie bei Funkloch oder Fehler).
+      const entitled = new Set(list.map(r => String(r.id)));
+      const lost = cur.repertoires.filter(r => isCourseId(r.id) && !r.locked && !entitled.has(r.id.slice('course-'.length))).map(r => r.id);
+      if (lost.length) {
+        update(c => ({
+          repertoires: c.repertoires.map(r =>
+            lost.includes(r.id) ? { id: r.id, name: r.name, color: r.color, chapters: [], locked: true, courseVersion: 0, createdAt: r.createdAt, updatedAt: Date.now() } : r,
+          ),
+        }));
+      }
       const need = list
         .filter(r => {
           if (removed[r.id]) return false;
           const mine = mineOf(r.id);
-          return !mine || (r.version || 1) > localVersion(mine, r.id);
+          return !mine || mine.locked || (r.version || 1) > localVersion(mine, r.id);
         })
         .map(r => r.id);
       const found = { count: list.length };
       if (!need.length) return found;
       const rows = await fetchCourses(need);
       const add = [];
+      const back = {}; // wieder freigeschaltete Kurse: Inhalt neu anlegen, Lernstand ist noch da
       const patch = {}; // Änderungen an schon vorhandenen Kurs-Repertoires (Struktur und Lernstand bleiben)
       for (const row of rows) {
         const id = 'course-' + row.id;
@@ -120,9 +132,9 @@ function App() {
         const hasKeys = row.key_solutions && Object.keys(row.key_solutions).length > 0;
         const fresh = parseRepertoirePgn(String(row.pgn || '').replace(/^﻿/, ''));
         const mine = mineOf(row.id);
-        if (!mine) {
+        if (!mine || mine.locked) {
           if (!fresh.length) continue;
-          add.push({
+          const entry = {
             id,
             name: row.name,
             color: row.color,
@@ -130,9 +142,11 @@ function App() {
             ...(hasKeys ? { keySolutions: row.key_solutions } : {}),
             ...(hasVideos ? { videos: row.videos } : {}),
             courseVersion: version,
-            createdAt: Date.now(),
+            createdAt: mine ? mine.createdAt : Date.now(),
             updatedAt: Date.now(),
-          });
+          };
+          if (mine) back[id] = entry;
+          else add.push(entry);
           continue;
         }
         const p = { courseVersion: version };
@@ -144,14 +158,14 @@ function App() {
         if (hasKeys) p.keySolutions = row.key_solutions; // Lösungstexte kommen vom Kurs, nicht vom Nutzer
         patch[id] = p;
       }
-      if (!add.length && !Object.keys(patch).length) return found;
+      if (!add.length && !Object.keys(patch).length && !Object.keys(back).length) return found;
       update(c => {
         const have = new Set(c.repertoires.map(r => r.id));
         const fresh = add.filter(r => !have.has(r.id));
         return {
-          repertoires: [...c.repertoires.map(r => (patch[r.id] ? { ...r, ...patch[r.id], updatedAt: Date.now() } : r)), ...fresh],
+          repertoires: [...c.repertoires.map(r => (back[r.id] ? back[r.id] : patch[r.id] ? { ...r, ...patch[r.id], updatedAt: Date.now() } : r)), ...fresh],
           // Neu angelegte Kurse: den Lernfortschritt aus dem Konto beim nächsten Abgleich vollständig nachladen
-          ...(fresh.length ? { sync: { ...c.sync, cardsPull: 0 } } : {}),
+          ...(fresh.length || Object.keys(back).length ? { sync: { ...c.sync, cardsPull: 0 } } : {}),
         };
       });
       return found;
@@ -166,7 +180,7 @@ function App() {
     if (!firstLogin.current) return;
     if (!found) return setLoginNote({ kind: 'error' });
     firstLogin.current = false;
-    const names = dbRef.current.repertoires.filter(r => isCourseId(r.id)).map(r => r.name);
+    const names = dbRef.current.repertoires.filter(r => isCourseId(r.id) && !r.locked).map(r => r.name);
     if (!found.count) setLoginNote({ kind: 'none', email: acc.email });
     else setLoginNote(names.length ? { kind: 'found', names } : null);
   };
@@ -361,7 +375,7 @@ function App() {
       const progress = { ...cur.progress };
       delete progress[id];
       // Gelöschter Kurs: merken, damit er auf keinem Gerät wieder angelegt wird (wird mit den Einstellungen abgeglichen)
-      if (isCourseId(id)) {
+      if (isCourseId(id) && !(cur.repertoires.find(r => r.id === id) || {}).locked) {
         const coursesRemoved = { ...(cur.settings.coursesRemoved || {}), [id.slice('course-'.length)]: true };
         return { repertoires: cur.repertoires.filter(r => r.id !== id), progress, settings: { ...cur.settings, coursesRemoved, updatedAt: Date.now() } };
       }
@@ -381,9 +395,18 @@ function App() {
       return { progress: { ...cur.progress, [repId]: mine }, activity: { ...cur.activity, days } };
     });
 
-  const rep = view.repId ? db.repertoires.find(r => r.id === view.repId) : null;
+  // Gesperrte Kurse: 'revoked' = Zugang beendet (Inhalt ist schon vom Gerät gelöscht), 'signedout' = nicht angemeldet.
+  // Für die Oberfläche bekommen sie leere Kapitel; an den gespeicherten Daten ändert das nichts.
+  const signedIn = !!account || maySignedIn();
+  const lockOf = r => (isCourseId(r.id) ? (r.locked ? 'revoked' : signedIn ? null : 'signedout') : null);
+  const vdb = db.repertoires.some(lockOf)
+    ? { ...db, repertoires: db.repertoires.map(r => (lockOf(r) ? { ...r, chapters: [], keySolutions: undefined, videos: undefined, lock: lockOf(r) } : r)) }
+    : db;
+  const rep = view.repId ? vdb.repertoires.find(r => r.id === view.repId) : null;
+  // Lernen, Editor und Testpartie gibt es für gesperrte Kurse nicht: stattdessen die Kursseite mit dem Hinweis
+  const vname = rep && rep.lock && ['train', 'edit', 'scrim'].includes(view.name) ? 'rep' : view.name;
   let body;
-  if (view.name === 'train' && rep && view.mode === 'keys') {
+  if (vname === 'train' && rep && view.mode === 'keys') {
     // Von der Startseite gestartet (nur fällige): am Ende den nächsten Kurs mit fälligen Stellungen anbieten
     const only = view.focusKey === 'due' || view.focusKey === 'fresh' ? view.focusKey : null;
     const other =
@@ -405,7 +428,7 @@ function App() {
       onExit=${back}
       onMore=${() => train(rep.id, 'keys', null, null, view.backTo)}
     />`;
-  } else if (view.name === 'train' && rep) {
+  } else if (vname === 'train' && rep) {
     body = html`<${Trainer}
       key=${view.nonce}
       rep=${rep}
@@ -423,9 +446,9 @@ function App() {
       onMore=${() => train(rep.id, view.mode, view.chapter, null, view.backTo)}
       onDone=${() => view.mode !== 'practice' && update(cur => ({ settings: { ...cur.settings, lessons: (cur.settings.lessons || 0) + 1 } }))}
     />`;
-  } else if (view.name === 'edit' && rep) {
+  } else if (vname === 'edit' && rep) {
     body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} />`;
-  } else if (view.name === 'scrim' && rep) {
+  } else if (vname === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}
       rep=${rep}
@@ -435,11 +458,11 @@ function App() {
       onExit=${back}
       onEdit=${at => setView({ name: 'edit', repId: rep.id, at, backTo: view.backTo })}
     />`;
-  } else if (view.name === 'rep' && rep) {
+  } else if (vname === 'rep' && rep) {
     body = html`<${RepertoireView}
       setSettings=${setSettings}
       attachKeySolutions=${attachKeySolutions}
-      db=${db}
+      db=${vdb}
       rep=${rep}
       train=${train}
       edit=${(id, focus) => setView({ name: 'edit', repId: id, focus, backTo: here })}
@@ -453,14 +476,15 @@ function App() {
         go('home');
       }}
       back=${() => go('home')}
+      openLogin=${cloudEnabled() ? () => setShowAccount(true) : null}
     />`;
   } else if (view.name === 'games') {
     body = html`<${GamesView} db=${db} update=${update} />`;
   } else if (view.name === 'compare') {
-    body = html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${id => setView({ name: 'rep', repId: id })} />`;
+    body = html`<${CompareView} db=${vdb} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${id => setView({ name: 'rep', repId: id })} />`;
   } else {
     body = html`<${RepertoiresView}
-      db=${db}
+      db=${vdb}
       setGoal=${goal => update(cur => ({ activity: { ...cur.activity, goal, updatedAt: Date.now() } }))}
       setSettings=${setSettings}
       addRepertoire=${addRepertoire}

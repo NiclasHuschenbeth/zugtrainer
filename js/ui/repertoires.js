@@ -157,7 +157,21 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
   </div>`;
 }
 
+const LOCK_TEXT = {
+  revoked: 'Dein Zugang zu diesem Kurs ist beendet. Dein Lernfortschritt bleibt gespeichert.',
+  signedout: 'Melde dich an, um diesen Kurs weiter zu nutzen. Dein Lernfortschritt bleibt gespeichert.',
+};
+
 function RepTile({ rep, progress, open, alts }) {
+  if (rep.lock) {
+    return html`<button class="card tile locked" onClick=${open}>
+      <div class="row between">
+        <h3 class="flat">${rep.name}</h3>
+        <span class="chip lock">🔒 gesperrt</span>
+      </div>
+      <div class="muted small">${LOCK_TEXT[rep.lock]}</div>
+    </button>`;
+  }
   const s = repStats(rep, progress, alts);
   const pct = pctOf(s.learned, s.total);
   return html`<button class="card tile" onClick=${open}>
@@ -172,7 +186,26 @@ function RepTile({ rep, progress, open, alts }) {
 }
 
 /** Ein Repertoire: Kapitel mit Fortschritt, zwei Hauptknöpfe, Werkzeuge im Menü. */
-export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, scrim, compare, remove, back }) {
+export function RepertoireView(props) {
+  const { rep, remove, back, openLogin } = props;
+  if (!rep.lock) return html`<${OpenRepertoireView} ...${props} />`;
+  return html`<div class="stack">
+    <div><button class="link" onClick=${back}>← Alle Repertoires</button></div>
+    <div class="card locked-card">
+      <h1 class="rep-title">${rep.name} <span class="chip lock">🔒 gesperrt</span></h1>
+      <p>${LOCK_TEXT[rep.lock]}</p>
+      ${rep.lock === 'revoked' && html`<p class="muted small">Wenn du den Kurs wieder freischaltest, erscheint er hier von selbst, mit deinem bisherigen Lernstand.</p>`}
+      <div class="row">
+        ${rep.lock === 'signedout' && openLogin && html`<button class="btn primary" onClick=${openLogin}>Anmelden</button>`}
+        ${rep.lock === 'revoked' && CONFIG.shopUrl && html`<a class="btn primary" href=${CONFIG.shopUrl} target="_blank" rel="noopener">Zum Shop ↗</a>`}
+        ${rep.lock === 'revoked' &&
+        html`<button class="btn" onClick=${() => confirm(`„${rep.name}“ aus der Liste entfernen? Der Lernfortschritt auf diesem Gerät wird dabei gelöscht.`) && remove()}>Aus der Liste entfernen</button>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, scrim, compare, remove, back }) {
   const scope = scopeOf(db.settings, rep);
   const lessons = lessonsOf(rep);
   const prio = hasPriority(rep);

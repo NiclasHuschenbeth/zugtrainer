@@ -5,7 +5,7 @@ export const CONFIG = {
   impressumUrl: 'https://modernchess.de/impressum/',
   datenschutzUrl: 'https://modernchess.de/datenschutz/',
   // Kursübersicht für Besucher ohne Kauf (erster Bildschirm)
-  shopUrl: 'https://modernchess.de/',
+  shopUrl: 'https://modernchess.de/shop',
   // Hilfe- oder Kontaktseite, verlinkt, wenn nach der Anmeldung kein Kurs gefunden wird. Leer = kein Link.
   helpUrl: '',
   // Konten und Abgleich (Supabase). Der öffentliche Schlüssel ist für Webseiten gedacht und kein Geheimnis;

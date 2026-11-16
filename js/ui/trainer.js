@@ -3,7 +3,7 @@ import { de } from '../lib/repertoire.js';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
 import { parseSquare } from 'chessops/util.js';
-import { derived, epdOf, moveLabel, moveText, posFromFen, turnOf } from '../lib/repertoire.js';
+import { derived, epdOf, moveLabel, moveText, posFromFen, turnOf, whiteLabel } from '../lib/repertoire.js';
 import { buildTasks, scopeOf } from '../lib/srs.js';
 import { sounds } from '../lib/sound.js';
 import { Board } from './board.js';
@@ -417,7 +417,7 @@ function MoveList({ e, line }) {
     const n = line.nodes[i];
     const before = i ? line.nodes[i - 1].fen : line.startFen;
     const label = moveLabel(before);
-    const showLabel = label.endsWith('.') || i === 0 || line.nodes[i - 1].comment;
+    const showLabel = whiteLabel(label) || i === 0 || line.nodes[i - 1].comment;
     items.push(html`<span class=${`mv ${line.keys[i] ? 'mine' : ''} ${i === shown - 1 ? 'last' : ''}`}>
       ${showLabel && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph || ''}
     </span>`);

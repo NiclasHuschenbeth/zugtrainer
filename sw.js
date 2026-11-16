@@ -1,6 +1,6 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = 'c59d2d2d76';
+const VERSION = '3b65f32b68';
 const FILES = [
   "./",
   ".gitignore",

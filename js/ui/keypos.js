@@ -1,4 +1,4 @@
-import { html, useMemo, useRef, useState } from 'preact';
+import { html, useEffect, useMemo, useRef, useState } from 'preact';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
 import { parseSquare } from 'chessops/util.js';
@@ -117,6 +117,13 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
     if (n < tasks.length) show(tasks[n], true);
   };
 
+  // Automatisch weiter: nach einer auf Anhieb richtigen Lösung kurz zeigen, dann die nächste Stellung
+  useEffect(() => {
+    if (!settings.keyAuto || state.phase !== 'right' || state.hinted || state.failed || finished) return;
+    const t = setTimeout(next, 900);
+    return () => clearTimeout(t);
+  }, [state.phase, i, settings.keyAuto]);
+
   const redoMissed = () => {
     graded.current = false;
     setTasks(missed);
@@ -188,7 +195,12 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
               ${state.phase !== 'ask' && html`<button class="btn primary" onClick=${next}>${i + 1 < tasks.length ? 'Weiter' : 'Fertig'}</button>`}
             </div>`}
       <div class="row toggles">
-        <label class="check"><input type="checkbox" checked=${settings.keyShuffle !== false} onChange=${ev => setSettings({ keyShuffle: ev.target.checked })} /> Gemischt (gilt ab der nächsten Sitzung)</label>
+        <label class="check" title="An: Die Stellungen kommen in zufälliger Reihenfolge. Aus: in der Reihenfolge des Kurses."><input type="checkbox" checked=${settings.keyShuffle !== false} onChange=${ev => setSettings({ keyShuffle: ev.target.checked })} /> Zufällige Reihenfolge</label>
+        <label class="check" title="Nach einer auf Anhieb richtigen Lösung geht es nach einem Moment von selbst weiter."><input type="checkbox" checked=${!!settings.keyAuto} onChange=${ev => setSettings({ keyAuto: ev.target.checked })} /> Automatisch weiter</label>
+      </div>
+      <div class="muted small">
+        Zufällige Reihenfolge: gemischt statt in der Reihenfolge des Kurses (gilt ab der nächsten Sitzung).
+        Automatisch weiter: Nach einer richtigen Lösung kommt gleich die nächste Stellung, die Erklärung siehst du dann nur kurz.
       </div>
     </div>
   </div>`;

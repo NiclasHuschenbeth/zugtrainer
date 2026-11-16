@@ -178,8 +178,8 @@ function Detail({ e, rep, train }) {
   return html`<div class="card detail">
     <${Board} fen=${e.fen} orientation=${rep.color} shapes=${shapes} />
     ${e.type === 'you'
-      ? html`<p>Du hast <b class="bad">${label} ${de(e.played)}</b> gespielt (roter Pfeil). Dein Repertoire sieht hier <b class="ok">${sans(e.expected)}</b> vor (grün).</p>`
-      : html`<p>Dein Gegner spielte <b class="warn">${label} ${de(e.played)}</b> (gelber Pfeil). Dein Repertoire behandelt hier nur <b>${sans(e.expected)}</b> – diese Variante fehlt noch.</p>`}
+      ? html`<p>Du hast <b class="bad">${label}${de(e.played)}</b> gespielt (roter Pfeil). Dein Repertoire sieht hier <b class="ok">${sans(e.expected)}</b> vor (grün).</p>`
+      : html`<p>Dein Gegner spielte <b class="warn">${label}${de(e.played)}</b> (gelber Pfeil). Dein Repertoire behandelt hier nur <b>${sans(e.expected)}</b> – diese Variante fehlt noch.</p>`}
     <p class="muted small">Bilanz in diesen Partien: ${e.w} Siege · ${e.d} Remis · ${e.l} Niederlagen</p>
     ${e.type === 'you' && html`<button class="btn primary" onClick=${() => train(rep.id, 'practice', null, `${epdOf(e.fen)}|${e.expected[0].san}`)}>Diese Linie üben</button>`}
     <h3>Partien</h3>

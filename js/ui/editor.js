@@ -4,7 +4,7 @@ import { chessgroundDests } from 'chessops/compat.js';
 import { INITIAL_FEN, makeFen } from 'chessops/fen.js';
 import { makeSanAndPlay, parseSan } from 'chessops/san.js';
 import { parseSquare, parseUci } from 'chessops/util.js';
-import { moveKeys, moveLabel, posFromFen, turnOf } from '../lib/repertoire.js';
+import { moveKeys, moveLabel, moveText, posFromFen, turnOf, whiteLabel } from '../lib/repertoire.js';
 import { downloadPgn } from '../lib/pgnexport.js';
 import { StockfishEngine, formatScore } from '../lib/engine.js';
 import { PRESETS, explore, masterGames, masterPgn, startLogin } from '../lib/lichess.js';
@@ -18,7 +18,7 @@ const GLYPHS = ['!', '?', '!!', '??', '!?', '?!'];
 const POS = [['=', 'ausgeglichen'], ['∞', 'unklar'], ['⩲', 'Weiß steht etwas besser'], ['⩱', 'Schwarz steht etwas besser'], ['±', 'Weiß steht besser'], ['∓', 'Schwarz steht besser'], ['+−', 'Weiß steht auf Gewinn'], ['−+', 'Schwarz steht auf Gewinn']];
 const annotated = n => !!(n.comment || (n.shapes && n.shapes.length));
 
-export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit }) {
+export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free }) {
   const work = useRef(null);
   if (!work.current) work.current = structuredClone(rep);
   const w = work.current;
@@ -266,7 +266,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit 
         ${node
           ? html`<div class="node-tools">
               <div class="row">
-                <b>${moveLabel(trail.length > 1 ? trail[trail.length - 2].fen : chapter.startFen)} ${de(node.san)}</b>
+                <b>${moveLabel(trail.length > 1 ? trail[trail.length - 2].fen : chapter.startFen)}${de(node.san)}</b>
                 ${GLYPHS.map(g => html`<button class=${`btn small glyph ${node.glyph === g ? 'on' : ''}`} onClick=${() => setGlyph(g)}>${g}</button>`)}
               </div>
               <div class="row">
@@ -282,11 +282,11 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit 
           : html`<p class="muted small">Spiele einen Zug auf dem Brett, um zu beginnen. Ein zweiter Zug in derselben Stellung legt eine Variante an.</p>`}
       </div>
 
-      <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} onPlay=${uci => playMove(parseUci(uci))} onBest=${setBest} />
+      <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlay=${uci => playMove(parseUci(uci))} onBest=${setBest} />
       <${CloudPanel} fen=${fen} enabled=${settings.cloud} setEnabled=${v => setSettings({ cloud: v })} onEval=${setCloudEval} onPlay=${san => playMove(parseSan(posFromFen(fen), san))} />
       <${ExplorerPanel} fen=${fen} settings=${settings} setSettings=${setSettings} repId=${w.id} onPlay=${san => playMove(parseSan(posFromFen(fen), san))} />
       <${ModelGamesPanel} fen=${fen} token=${settings.lichessToken} orientation=${orient} />
-      <${CoveragePanel} rep=${w} settings=${settings} setSettings=${setSettings} onJump=${(c, p) => { setCi(c); setPath(p); }} />
+      ${!free && html`<${CoveragePanel} rep=${w} settings=${settings} setSettings=${setSettings} onJump=${(c, p) => { setCi(c); setPath(p); }} />`}
     </div>
   </div>`;
 }
@@ -313,7 +313,7 @@ function Tree({ chapter, path, select }) {
     const label = moveLabel(fenBefore);
     const key = p.join('.');
     return html`<span class=${`mv ${key === current ? 'cur' : ''}`} onClick=${() => select(p)}>
-        ${(forceLabel || label.endsWith('.')) && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph && html`<span class="gl">${n.glyph}</span>`}${n.pos && html`<span class="gl"> ${n.pos}</span>`}
+        ${(forceLabel || whiteLabel(label)) && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph && html`<span class="gl">${n.glyph}</span>`}${n.pos && html`<span class="gl"> ${n.pos}</span>`}
       </span>
       ${n.comment && html`<span class="cmi">${n.comment}</span>`}`;
   };
@@ -411,12 +411,12 @@ function pvToSan(fen, pv, max = 8) {
     if (!move || !pos.isLegal(move)) break;
     const label = moveLabel(makeFen(pos.toSetup()));
     const san = makeSanAndPlay(pos, move);
-    out.push(label.endsWith('.') || !out.length ? `${label} ${san}` : san);
+    out.push(whiteLabel(label) || !out.length ? `${label}${san}` : san);
   }
   return out.join(' ');
 }
 
-function EnginePanel({ fen, enabled, setEnabled, onPlay, onBest }) {
+function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlay, onBest }) {
   const [info, setInfo] = useState(null);
   const [error, setError] = useState('');
   const eng = useRef(null);
@@ -424,7 +424,7 @@ function EnginePanel({ fen, enabled, setEnabled, onPlay, onBest }) {
   useEffect(() => {
     if (!enabled) return;
     try {
-      eng.current = new StockfishEngine(setInfo);
+      eng.current = new StockfishEngine(setInfo, { multiPv: lines });
     } catch (err) {
       setError('Stockfish konnte nicht gestartet werden.');
       return;
@@ -436,11 +436,11 @@ function EnginePanel({ fen, enabled, setEnabled, onPlay, onBest }) {
       setInfo(null);
       onBest(null);
     };
-  }, [enabled]);
+  }, [enabled, lines]);
 
   useEffect(() => {
     if (enabled && eng.current) eng.current.analyse(fen);
-  }, [fen, enabled]);
+  }, [fen, enabled, lines]);
 
   const fresh = info && info.fen === fen ? info : null;
   useEffect(() => {
@@ -456,7 +456,12 @@ function EnginePanel({ fen, enabled, setEnabled, onPlay, onBest }) {
   return html`<div class="card">
     <div class="row between">
       <h3 class="flat">Stockfish 19 ${fresh && html`<span class="muted small">Tiefe ${fresh.depth}</span>`}</h3>
-      <label class="check"><input type="checkbox" checked=${enabled} onChange=${e => setEnabled(e.target.checked)} /> an</label>
+      <span class="row">
+        ${enabled && html`<label class="inline small" title="Wie viele Varianten Stockfish gleichzeitig zeigt">Varianten
+          <select class="auto" value=${lines} onChange=${e => setLines(+e.target.value)}>${[1, 2, 3, 4, 5].map(n => html`<option value=${n}>${n}</option>`)}</select>
+        </label>`}
+        <label class="check"><input type="checkbox" checked=${enabled} onChange=${e => setEnabled(e.target.checked)} /> an</label>
+      </span>
     </div>
     ${error && html`<div class="msg bad">${error}</div>`}
     ${enabled && !error && html`<div class="pvs">
@@ -469,6 +474,9 @@ function EnginePanel({ fen, enabled, setEnabled, onPlay, onBest }) {
     </div>`}
   </div>`;
 }
+
+// Hat nichts mit der eigenen Anmeldung zu tun: der Server der Lichess-Eröffnungsdatenbank antwortet nicht
+const LICHESS_DOWN = 'Die Eröffnungsdatenbank von Lichess antwortet gerade nicht. Das liegt am Lichess-Server, nicht an deiner Anmeldung. Bitte später noch einmal versuchen.';
 
 function ExplorerPanel({ fen, settings, setSettings, repId, onPlay }) {
   const [state, setState] = useState({ data: null, error: '', loading: false });
@@ -485,7 +493,7 @@ function ExplorerPanel({ fen, settings, setSettings, repId, onPlay }) {
         .catch(err => {
           if (!live) return;
           if (err.auth) setSettings({ lichessToken: null });
-          setState({ data: null, error: err.auth ? '' : err instanceof TypeError ? 'Keine Verbindung zur Lichess-Datenbank.' : err.message, loading: false });
+          setState({ data: null, error: err.auth ? '' : err instanceof TypeError ? LICHESS_DOWN : err.message, loading: false });
         });
     }, 250);
     return () => {
@@ -572,7 +580,7 @@ function CloudPanel({ fen, enabled, setEnabled, onPlay, onEval }) {
       ${d && d.status === 'ok' && html`<table class="table explorer cloud">
         <tbody>
           ${d.moves.slice(0, 8).map(m => html`<tr onClick=${() => onPlay(m.san)} title="Zug übernehmen">
-            <td><b>${de(m.san)}</b></td>
+            <td><b>${moveText(fen, m.san)}</b></td>
             <td><b class=${m.cp >= 0 ? 'ev w' : 'ev b'}>${formatCloud(m.cp)}</b></td>
             <td class=${`small rank${m.rank}`}>${TAG[m.rank] || ''}</td>
           </tr>`)}
@@ -585,6 +593,12 @@ function CloudPanel({ fen, enabled, setEnabled, onPlay, onEval }) {
           : html`<button class="link" onClick=${queue}>Analyse anfordern</button>`}
       </div>`}
       ${d && (d.status === 'checkmate' || d.status === 'stalemate') && html`<div class="muted small">Partie ist hier zu Ende.</div>`}
+      <details class="muted small source-info">
+        <summary>Woher kommen diese Zahlen?</summary>
+        Aus der Chess Cloud Database (<a href="https://www.chessdb.cn/queryc_en/" target="_blank" rel="noopener">chessdb.cn</a>), einer öffentlichen Sammlung
+        vorab berechneter Stockfish-Bewertungen. Die Zahl ist die Bewertung in Bauerneinheiten aus Sicht von Weiß (+ = Weiß steht besser).
+        Die Werte sind oft tiefer gerechnet als das Stockfish hier im Browser, aber nicht für jede Stellung vorhanden.
+      </details>
       ${d && d.status === 'invalid board' && html`<div class="muted small">ChessDB kann diese Stellung nicht auswerten.</div>`}
     `}
   </div>`;
@@ -622,7 +636,7 @@ function CoveragePanel({ rep, settings, setSettings, onJump }) {
     <span class="grow small">
       ${g.type === 'answer'
         ? html`Nach <b>${de(lineText(rep, g.ci, g.path)) || 'der Grundstellung'}</b> hast du keinen Zug.`
-        : html`<b>${moveLabel(g.fen)} ${de(g.san)}</b> <span class="muted">nach ${de(lineText(rep, g.ci, g.path)) || 'der Grundstellung'} · spielen dort ${pct(g.share)}</span>`}
+        : html`<b>${moveLabel(g.fen)}${de(g.san)}</b> <span class="muted">nach ${de(lineText(rep, g.ci, g.path)) || 'der Grundstellung'} · spielen dort ${pct(g.share)}</span>`}
     </span>
   </button>`;
 
@@ -667,7 +681,7 @@ function ModelGamesPanel({ fen, token, orientation }) {
     const t = setTimeout(() => {
       masterGames(fen, token)
         .then(games => live && setState({ fen, games, error: '' }))
-        .catch(err => live && setState({ fen, games: null, error: err instanceof TypeError ? 'Keine Verbindung zur Lichess-Datenbank.' : err.message }));
+        .catch(err => live && setState({ fen, games: null, error: err instanceof TypeError ? LICHESS_DOWN : err.message }));
     }, 350);
     return () => {
       live = false;
@@ -773,7 +787,7 @@ function GameViewer({ pgn, game, fen, orientation, onClose }) {
         </div>
         <div class="tree" ref=${box}>
           ${list.slice(1).map((m, k) => html`<span class=${`mv ${k + 1 === i ? 'cur' : ''}`} onClick=${() => setI(k + 1)}>
-            ${(m.label.endsWith('.') || k === 0) && html`<span class="no">${m.label}</span>`}${de(m.san)}
+            ${(whiteLabel(m.label) || k === 0) && html`<span class="no">${m.label}</span>`}${de(m.san)}
           </span>`)}
         </div>
       </div>

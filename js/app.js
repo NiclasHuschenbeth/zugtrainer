@@ -5,7 +5,6 @@ import { dayKey, gradeCard, keyStats } from './lib/srs.js';
 import { positionVisits } from './lib/analysis.js';
 import { finishLogin } from './lib/lichess.js';
 import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
-import { Menu, MenuItem } from './ui/menu.js';
 import { Trainer } from './ui/trainer.js';
 import { KeyTrainer } from './ui/keypos.js';
 import { GamesView } from './ui/games.js';
@@ -41,7 +40,7 @@ window.addEventListener('beforeinstallprompt', e => {
 const viewToHash = v => {
   if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
   if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + v.chapter : ''}`;
-  if (v.name === 'games' || v.name === 'compare') return `#/${v.name}`;
+  if (v.name === 'games' || v.name === 'compare' || v.name === 'analyse') return `#/${v.name}`;
   return '#/';
 };
 const hashToView = h => {
@@ -50,7 +49,7 @@ const hashToView = h => {
   if (n === 'train' && id && ['learn', 'review', 'keys'].includes(mode)) {
     return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? +ch : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
   }
-  if (n === 'games' || n === 'compare') return { name: n };
+  if (n === 'games' || n === 'compare' || n === 'analyse') return { name: n };
   return { name: 'home' };
 };
 
@@ -65,6 +64,7 @@ function App() {
   const [showBoard, setShowBoard] = useState(false);
   const [loginNote, setLoginNote] = useState(null); // Rückmeldung nach der Anmeldung: loading | found | none | error
   const firstLogin = useRef(false);
+  const scratch = useRef({ id: 'analyse', name: 'Analyse', color: 'white', chapters: [{ name: 'Analyse', startFen: INITIAL_FEN, children: [] }] });
   const [courseNote, setCourseNote] = useState(null); // Namen gerade aktualisierter Kurse
   const [courseBusy, setCourseBusy] = useState(null);
   // Brett-Einstellungen auf die ganze Seite anwenden (Farben und Größe über CSS, Verhalten über board.js)
@@ -410,9 +410,9 @@ function App() {
   const attachKeySolutions = (repId, keySolutions) =>
     update(cur => ({ repertoires: cur.repertoires.map(r => (r.id === repId ? { ...r, keySolutions, updatedAt: Date.now() } : r)) }));
 
-  const newRepertoire = color => {
+  const newRepertoire = (color, name) => {
     const id = addRepertoire({
-      name: 'Neues Repertoire',
+      name: (name || '').trim() || 'Neues Repertoire',
       color,
       chapters: [{ name: 'Kapitel 1', startFen: INITIAL_FEN, children: [] }],
     });
@@ -501,6 +501,9 @@ function App() {
     />`;
   } else if (vname === 'edit' && rep) {
     body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} />`;
+  } else if (view.name === 'analyse') {
+    // Freies Analysebrett: der Editor auf einem Notizblock, der nur bis zum Neuladen der Seite bleibt (nichts wird gespeichert)
+    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} />`;
   } else if (vname === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}
@@ -579,9 +582,8 @@ function App() {
       <div class="brand" onClick=${() => go('home')} title="Modern Chess Trainer"><img src="icons/logo-wordmark-trainer.png" alt="Modern Chess Trainer" /></div>
       <nav>
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
-        <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
-          <${MenuItem} title="Meine Partien auswerten" hint="Partien von Lichess und Chess.com laden: Eröffnungsstatistik und Abgleich mit dem Repertoire" onClick=${() => go('compare')} />
-        <//>
+        <button class=${inTools ? 'on' : ''} onClick=${() => go('compare')} title="Partien von Lichess und Chess.com laden: Eröffnungsstatistik und Abgleich mit dem Repertoire">Meine Partien</button>
+        <button class=${view.name === 'analyse' ? 'on' : ''} onClick=${() => go('analyse')} title="Freies Brett mit Stockfish, Cloud-Bewertung und Eröffnungsdatenbank">Analyse</button>
       </nav>
       <div class="top-right">
         <button class="acct gear" onClick=${() => setShowBoard(true)} title="Brett-Einstellungen: Farben, Größe, Zugeingabe" aria-label="Brett-Einstellungen">⚙ Brett</button>
@@ -629,7 +631,7 @@ function App() {
           </span>
         </div>`,
       )}
-    <main class=${view.name === 'edit' ? 'wide' : ''}>${body}</main>
+    <main class=${view.name === 'edit' || view.name === 'analyse' ? 'wide' : ''}>${body}</main>
     <footer class="foot">
       Brett und Schachlogik: <a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">chessground</a> und
       <a href="https://github.com/niklasf/chessops" target="_blank" rel="noopener">chessops</a> aus dem Lichess-Projekt,

@@ -16,16 +16,17 @@ export function posFromFen(fen) {
   return Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
 }
 
-/** Zug mit Nummer: "9. De5" (Weiß) bzw. "6...Dh5" (Schwarz, ohne Leerzeichen). */
+/** Zug mit Nummer, immer ohne Leerzeichen: "9.De5" (Weiß) bzw. "6...Dh5" (Schwarz). */
 export function moveText(fenBefore, san) {
   const f = fenBefore.split(' ');
-  return f[1] === 'w' ? `${f[5]}. ${de(san)}` : `${f[5]}...${de(san)}`;
+  return f[1] === 'w' ? `${f[5]}.${de(san)}` : `${f[5]}...${de(san)}`;
 }
 
-/** "12." bzw. "12…" für den Zug, der in dieser Stellung gespielt wird. */
+/** "12." bzw. "12..." für den Zug, der in dieser Stellung gespielt wird. Der Zug folgt ohne Leerzeichen. */
+export const whiteLabel = label => !label.endsWith('..');
 export function moveLabel(fenBefore) {
   const f = fenBefore.split(' ');
-  return f[1] === 'w' ? `${f[5]}.` : `${f[5]}…`;
+  return f[1] === 'w' ? `${f[5]}.` : `${f[5]}...`;
 }
 
 /** Start-/Zielfeld für Brettanzeige (Rochade: Königszielfeld). */

@@ -5,7 +5,7 @@ export const THEMES = [
   { id: 'blue', name: 'Blau', light: '#E8EFF6', dark: '#7F9BBE' },
   { id: 'brown', name: 'Klassisch braun', light: '#F0D9B5', dark: '#B58863' },
 ];
-export const SIZES = ['Klein', 'Mittel', 'Normal', 'Groß', 'Maximal'];
+export const SIZES = ['Klein', 'Mittel', 'Groß', 'Sehr groß', 'Fenster füllen'];
 
 /** Einstellungen rund ums Brett. Gelten überall im Trainer und werden mit dem Konto synchronisiert. */
 export function BoardSettings({ settings, setSettings, onClose }) {
@@ -37,6 +37,7 @@ export function BoardSettings({ settings, setSettings, onClose }) {
 
       <div class="stack tight size-setting">
         <label for="board-size"><b>Brettgröße</b> <span class="muted small">(am Computer, beim Lernen)</span></label>
+        <div class="muted small">Das Brett wird nie höher als dein Fenster. „Fenster füllen“ nutzt die ganze Höhe.</div>
         <input id="board-size" type="range" min="1" max="5" step="1" value=${size} onInput=${ev => setSettings({ boardSize: +ev.target.value })} />
         <div class="depth-scale">${SIZES.map(s => html`<span class=${s === SIZES[size - 1] ? 'on' : ''}>${s}</span>`)}</div>
       </div>

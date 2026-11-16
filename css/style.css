@@ -222,11 +222,16 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 
 /* Board */
 /* Brett: Rahmen mit Koordinaten außen, Farben je nach Auswahl (Standard: Modern Chess wie in den Videos) */
-html { --board-w: 600px; --frame: #3C4953; --coord: #C9D3DB; }
-html[data-bsize="1"] { --board-w: 400px; }
-html[data-bsize="2"] { --board-w: 500px; }
-html[data-bsize="4"] { --board-w: 720px; }
-html[data-bsize="5"] { --board-w: min(860px, calc(100vh - 130px)); }
+/* Brettgröße: jede Stufe ist höchstens so hoch wie das Fenster (--board-fit), die letzte Stufe füllt es ganz aus */
+html { --board-fit: calc(100vh - 96px); --board-px: 600px; --board-w: min(var(--board-px), var(--board-fit)); --frame: #3C4953; --coord: #C9D3DB; }
+@supports (height: 100dvh) { html { --board-fit: calc(100dvh - 96px); } }
+html[data-bsize="1"] { --board-px: 400px; }
+html[data-bsize="2"] { --board-px: 500px; }
+html[data-bsize="4"] { --board-px: 720px; }
+html[data-bsize="5"] { --board-px: 2000px; }
+/* chessground rundet das Brett auf ganze Felder ab: den Rest gleichmäßig auf alle vier Seiten verteilen (sonst wirkt der Rahmen schief) */
+.board { display: grid; place-items: center; }
+.board cg-container { position: relative; top: auto; }
 .board-wrap { width: 100%; }
 .board-frame { position: relative; box-sizing: border-box; padding: 20px; background: var(--frame); border-radius: 10px; box-shadow: var(--shadow); }
 .board { width: 100%; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 2px; }
@@ -273,7 +278,7 @@ coords.squares:nth-of-type(odd) :nth-child(odd), coords.squares:nth-of-type(even
   max-height: 260px; min-height: 80px; overflow-y: auto; flex: 1;
 }
 .mv { display: inline-block; margin-right: .45rem; padding: 0 .2rem; border-radius: 3px; font-weight: 600; }
-.mv .no { color: var(--muted); font-weight: 400; margin-right: .2rem; }
+.mv .no { color: var(--muted); font-weight: 400; }
 .mv.last { background: var(--panel2); outline: 1px solid var(--line); }
 .cm { display: block; color: var(--muted); font-size: .88rem; line-height: 1.4; margin: .1rem 0 .3rem; }
 .trainer-actions { min-height: 2.6rem; }
@@ -533,6 +538,11 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 .tile.locked { opacity: .8; border-style: dashed; }
 .chip.lock { background: var(--panel2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .locked-card .chip { font-size: .8rem; vertical-align: middle; }
+
+/* Repertoire hinzufügen: Reiter */
+.add-tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .5rem; margin-bottom: .3rem; }
+.source-info { margin-top: .5rem; }
+.source-info summary { cursor: pointer; color: var(--primary); font-weight: 600; }
 
 /* Lichess-Studie übernehmen */
 .or-line { display: flex; align-items: center; gap: .8rem; color: var(--muted); font-size: .85rem; margin: .6rem 0 .2rem; }

@@ -8,7 +8,7 @@ import { chessgroundDests } from 'chessops/compat.js';
 import { makeFen } from 'chessops/fen.js';
 import { makeSanAndPlay, parseSan } from 'chessops/san.js';
 import { parseSquare, parseUci } from 'chessops/util.js';
-import { derived, epdOf, moveKeys, moveLabel, posFromFen, turnOf } from '../lib/repertoire.js';
+import { derived, epdOf, moveKeys, moveLabel, posFromFen, turnOf, whiteLabel } from '../lib/repertoire.js';
 import { StockfishEngine, formatScore } from '../lib/engine.js';
 import { PRESETS, explore, startLogin } from '../lib/lichess.js';
 import { locate } from '../lib/coverage.js';
@@ -113,7 +113,7 @@ class Game {
     const label = moveLabel(this.fen);
     this.last = moveKeys(pos, move);
     const san = makeSanAndPlay(pos, move);
-    this.moves.push(label.endsWith('.') || !this.moves.length ? `${label} ${san}` : san);
+    this.moves.push(whiteLabel(label) || !this.moves.length ? `${label}${san}` : san);
     this.fen = makeFen(pos.toSetup());
     return san;
   }
@@ -202,7 +202,7 @@ class Game {
     const san = this.apply(pick.move);
     if (this.phase === 'prep') {
       if (!known) this.leave({ type: 'end', fen });
-      else if (!known.has(san)) this.leave({ type: 'gap', fen, san: `${moveLabel(fen)} ${san}`, share: pick.share });
+      else if (!known.has(san)) this.leave({ type: 'gap', fen, san: `${moveLabel(fen)}${san}`, share: pick.share });
     }
     this.step();
   }
@@ -226,7 +226,7 @@ class Game {
           const [right, keys] = known.entries().next().value;
           this.onGrade(`${epdOf(fen)}|${right}`, false);
           this.arrow = { orig: keys.from, dest: keys.to, brush: 'green' };
-          this.left = { type: 'forgot', fen, played: `${moveLabel(fen)} ${san}`, right: `${moveLabel(fen)} ${right}` };
+          this.left = { type: 'forgot', fen, played: `${moveLabel(fen)}${san}`, right: `${moveLabel(fen)}${right}` };
           if (this.opts().sound) sounds.bad();
           return this.end('lost', null);
         }

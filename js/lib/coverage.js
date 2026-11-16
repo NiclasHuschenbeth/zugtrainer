@@ -1,6 +1,6 @@
 // Abdeckung: Welche häufigen Gegnerzüge fehlen im Repertoire?
 // Grundlage ist die Lichess-Eröffnungsdatenbank auf der gewählten Spielstärke.
-import { epdOf, moveLabel, turnOf } from './repertoire.js';
+import { epdOf, moveLabel, turnOf, whiteLabel } from './repertoire.js';
 import { explore } from './lichess.js';
 
 /** Stellungsgraph über alle Kapitel (Zugumstellungen fallen zusammen). */
@@ -37,7 +37,7 @@ export function lineText(rep, ci, path) {
     const n = kids[i];
     if (!n) break;
     const label = moveLabel(fen);
-    out.push(label.endsWith('.') || !out.length ? `${label} ${n.san}` : n.san);
+    out.push(whiteLabel(label) || !out.length ? `${label}${n.san}` : n.san);
     fen = n.fen;
     kids = n.children;
   }

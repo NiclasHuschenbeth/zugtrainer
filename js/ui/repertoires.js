@@ -429,6 +429,7 @@ function Upload({ addRepertoire, newRepertoire, hasAny, noSample, token }) {
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(!hasAny || !!pendingStudy());
+  const [tab, setTab] = useState(() => (pendingStudy() ? 'lichess' : 'pgn')); // pgn | lichess | empty
 
   const submit = async ev => {
     ev.preventDefault();
@@ -470,12 +471,36 @@ function Upload({ addRepertoire, newRepertoire, hasAny, noSample, token }) {
     </div>`;
   }
 
+  const nameAndColor = html`<div class="grid2">
+      <label>Name
+        <input type="text" value=${name} onInput=${e => setName(e.target.value)} placeholder="z. B. Sizilianisch Najdorf" />
+      </label>
+      <label>Ich spiele dieses Repertoire mit
+        <select value=${color} onChange=${e => setColor(e.target.value)}>
+          <option value="white">Weiß</option>
+          <option value="black">Schwarz</option>
+        </select>
+      </label>
+    </div>`;
+
   return html`<div class="card">
-    <h2>Repertoire hinzufügen</h2>
-    <${LichessImport} addRepertoire=${addRepertoire} token=${token} onDone=${() => setOpen(false)} />
-    <div class="or-line"><span>oder PGN-Datei hochladen</span></div>
-  <form class="stack" onSubmit=${submit}>
-    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. aus ChessBase. Jede Partie in der Datei wird ein Kapitel, jede Variante eine Linie.</p>
+    <div class="row between">
+      <h2>Repertoire hinzufügen</h2>
+      ${hasAny && html`<button class="btn ghost small" type="button" onClick=${() => setOpen(false)}>Schließen</button>`}
+    </div>
+    <div class="tabs add-tabs" role="tablist">
+      ${[['pgn', 'PGN-Datei'], ['lichess', 'Von Lichess'], ['empty', 'Leeres Repertoire']].map(
+        ([k, t]) => html`<button type="button" role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${t}</button>`,
+      )}
+    </div>
+    ${tab === 'lichess' && html`<${LichessImport} addRepertoire=${addRepertoire} token=${token} onDone=${() => setOpen(false)} />`}
+    ${tab === 'empty' && html`<div class="stack">
+      <p class="muted">Legt ein leeres Repertoire an und öffnet den Editor. Dort gibst du die Züge selbst auf dem Brett ein.</p>
+      ${nameAndColor}
+      <div class="row"><button class="btn primary" type="button" onClick=${() => newRepertoire(color, name)}>Im Editor anlegen</button></div>
+    </div>`}
+    ${tab === 'pgn' && html`<form class="stack" onSubmit=${submit}>
+    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. aus ChessBase oder der Export einer Lichess-Studie. Jede Partie in der Datei wird ein Kapitel, jede Variante eine Linie.</p>
     <div class="grid2">
       <label>Name
         <input type="text" value=${name} onInput=${e => setName(e.target.value)} placeholder="z. B. Sizilianisch Najdorf" />
@@ -497,10 +522,8 @@ function Upload({ addRepertoire, newRepertoire, hasAny, noSample, token }) {
     ${error && html`<div class="msg bad">${error}</div>`}
     <div class="row">
       <button class="btn primary" type="submit">Repertoire hinzufügen</button>
-      <button class="btn" type="button" onClick=${() => newRepertoire(color)}>Leeres Repertoire im Editor anlegen</button>
       ${!noSample && html`<button class="btn" type="button" onClick=${sample}>Beispiel-Repertoire laden</button>`}
-      ${hasAny && html`<button class="btn ghost" type="button" onClick=${() => setOpen(false)}>Abbrechen</button>`}
     </div>
-  </form>
+  </form>`}
   </div>`;
 }

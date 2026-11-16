@@ -31,6 +31,7 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [token, setToken] = useState('');
+  const [slow, setSlow] = useState(false); // Sicherheitsprüfung braucht auffällig lange
   const box = useRef(null);
   const widget = useRef(null);
   const needCaptcha = !!CONFIG.turnstileSiteKey;
@@ -39,12 +40,14 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
   useEffect(() => {
     if (!needCaptcha || account || step !== 'email' || !box.current) return;
     let gone = false;
+    setSlow(false);
+    const slowTimer = setTimeout(() => !gone && setSlow(true), 8000);
     loadTurnstile()
       .then(ts => {
         if (gone || !box.current) return;
         widget.current = ts.render(box.current, {
           sitekey: CONFIG.turnstileSiteKey,
-          theme: 'dark',
+          theme: 'light',
           language: 'de',
           callback: t => setToken(t),
           'expired-callback': () => setToken(''),
@@ -54,6 +57,7 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
       .catch(err => setError(err.message));
     return () => {
       gone = true;
+      clearTimeout(slowTimer);
       if (widget.current != null && window.turnstile) {
         try {
           window.turnstile.remove(widget.current);
@@ -131,17 +135,28 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
           `
         : step === 'email'
           ? html`<form class="stack" onSubmit=${send}>
+              <div class="msg info">
+                <b>Kurs gekauft?</b> Nimm die E-Mail-Adresse, mit der du gekauft hast. Deine Kurse werden dann automatisch freigeschaltet.
+              </div>
               <p class="muted">
-                Mit einem kostenlosen Konto sind deine Repertoires und dein Lernfortschritt auf allen deinen Geräten verfügbar.
-                Du bekommst einen Anmelde-Link per E-Mail, ein Passwort brauchst du nicht.
+                Du bekommst eine E-Mail mit ${CONFIG.emailCode ? 'einem Code' : 'einem Anmelde-Link'}, ein Passwort brauchst du nicht.
+                Das Konto ist kostenlos, und dein Lernfortschritt steht danach auf allen deinen Geräten bereit.
               </p>
               <label>E-Mail-Adresse
                 <input type="email" required autocomplete="email" value=${email} onInput=${e => setEmail(e.target.value)} placeholder="du@beispiel.de" />
               </label>
-              ${needCaptcha && html`<div ref=${box} class="captcha"></div>`}
+              ${needCaptcha &&
+              html`<div class="captcha-wrap">
+                <div ref=${box} class="captcha"></div>
+                ${!token && !error && html`<p class="muted small">
+                  ${slow
+                    ? html`Die Sicherheitsprüfung lädt nicht. <button type="button" class="link small" onClick=${() => location.reload()}>Seite neu laden</button>`
+                    : 'Sicherheitsprüfung läuft … Der Knopf wird gleich frei.'}
+                </p>`}
+              </div>`}
               ${error && html`<div class="msg bad">${error}</div>`}
               <div class="row">
-                <button class="btn primary" type="submit" disabled=${busy || !email || (needCaptcha && !token)}>${busy ? 'Sende …' : 'Anmelde-Link senden'}</button>
+                <button class="btn primary" type="submit" disabled=${busy || !email || (needCaptcha && !token)}>${busy ? 'Sende …' : CONFIG.emailCode ? 'Code senden' : 'Anmelde-Link senden'}</button>
               </div>
               <p class="muted small">
                 Mit der Anmeldung stimmst du der Verarbeitung deiner E-Mail-Adresse zur Kontoverwaltung zu, siehe${' '}
@@ -149,14 +164,16 @@ export function AccountDialog({ account, status, lastSync, onClose, onSend, onVe
               </p>
             </form>`
           : html`<div class="stack">
-              <div class="msg ok">Wir haben dir eine E-Mail an <b>${email}</b> geschickt. Klicke auf den Link darin – dann bist du angemeldet. Schau auch im Spam-Ordner nach.</div>
-              ${CONFIG.emailCode &&
-              html`<form class="stack" onSubmit=${verify}>
-                <label>… oder gib den Code aus der E-Mail ein
-                  <input type="text" inputmode="numeric" autocomplete="one-time-code" value=${code} onInput=${e => setCode(e.target.value)} placeholder="123456" />
-                </label>
-                <button class="btn primary" type="submit" disabled=${busy || !code}>Code bestätigen</button>
-              </form>`}
+              ${CONFIG.emailCode
+                ? html`<div class="msg ok">Wir haben dir eine E-Mail an <b>${email}</b> geschickt. Schau auch im Spam-Ordner nach.</div>
+                    <form class="stack" onSubmit=${verify}>
+                      <label>Code aus der E-Mail
+                        <input type="text" inputmode="numeric" autocomplete="one-time-code" value=${code} onInput=${e => setCode(e.target.value)} placeholder="123456" />
+                      </label>
+                      <button class="btn primary" type="submit" disabled=${busy || !code}>Anmelden</button>
+                    </form>
+                    <p class="muted small">Du kannst auch auf den Link in der E-Mail klicken. Er meldet dich aber in dem Browser an, in dem er sich öffnet – nicht in der App auf deinem Startbildschirm.</p>`
+                : html`<div class="msg ok">Wir haben dir eine E-Mail an <b>${email}</b> geschickt. Klicke auf den Link darin – dann bist du angemeldet. Schau auch im Spam-Ordner nach.</div>`}
               ${error && html`<div class="msg bad">${error}</div>`}
               <div class="row"><button class="btn ghost" onClick=${() => { setStep('email'); setError(''); }}>Andere Adresse verwenden</button></div>
             </div>`}

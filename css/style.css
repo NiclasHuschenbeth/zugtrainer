@@ -517,3 +517,45 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 }
 .grid2.wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
 .reco .link, .reco-hint .link { font-weight: 400; color: var(--muted); font-size: .85rem; }
+
+/* Erster Bildschirm: drei Wege */
+.start-options { display: flex; flex-direction: column; gap: 10px; margin-top: .4rem; }
+.start-opt { display: flex; flex-direction: column; gap: .15rem; width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; cursor: pointer; }
+button.start-opt:hover, .start-opt.on { border-color: var(--primary); }
+.start-opt b { font-size: 1.05rem; }
+.start-opt span { color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.start-opt.main { background: var(--primary); border-color: var(--primary); color: #fff; }
+.start-opt.main span { color: #fff; opacity: .9; }
+button.start-opt.main:hover { background: var(--primary-h); border-color: var(--primary-h); }
+div.start-opt { cursor: default; }
+
+/* Rückmeldung nach der Anmeldung */
+.login-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; width: 100%; max-width: 1048px; box-sizing: border-box; margin: 16px auto 0; padding: .7rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--info); border-radius: 12px; }
+.login-note.found { border-left-color: var(--ok); }
+.login-note.none, .login-note.error { border-left-color: var(--accent); }
+.login-note > span:first-child { flex: 1 1 260px; }
+.captcha-wrap p { margin: .2rem 0 0; }
+
+/* Kleine Bildschirme: größere Tippflächen, kein Hineinzoomen in Eingabefelder, schmale Kopfzeile beim Lernen */
+@media (max-width: 820px) {
+  .btn, .btn.small { min-height: 44px; }
+  .btn.small { padding: .45rem .8rem; }
+  .acct { min-height: 40px; }
+  .top nav button, .menu-btn { min-height: 40px; }
+  input[type=text], input[type=email], select, textarea { font-size: 16px; }
+  .dual, .dual input[type=range], .depth .dual input[type=range] { height: 36px; }
+  .dual-track { top: 16px; left: 14px; right: 14px; }
+  .dual input[type=range]::-webkit-slider-runnable-track { height: 36px; }
+  .dual input[type=range]::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: 4px; }
+  .dual input[type=range]::-moz-range-thumb { width: 24px; height: 24px; }
+  .top.slim nav { display: none; }
+  .login-note { width: auto; margin: 12px 12px 0; }
+}
+
+/* Handy im Querformat: Brett so hoch wie der Bildschirm, Text daneben */
+@media (orientation: landscape) and (max-height: 520px) {
+  .top.slim { display: none; }
+  .trainer { grid-template-columns: minmax(0, calc(100vh - 24px)) minmax(0, 1fr); gap: 12px; }
+  .trainer { grid-template-columns: minmax(0, calc(100dvh - 24px)) minmax(0, 1fr); }
+  main:has(> .trainer) { padding: 12px; }
+}

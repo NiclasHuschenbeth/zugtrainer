@@ -55,6 +55,8 @@ function App() {
   const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | error | offline
   const [showAccount, setShowAccount] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
+  const [loginNote, setLoginNote] = useState(null); // Rückmeldung nach der Anmeldung: loading | found | none | error
+  const firstLogin = useRef(false);
   // Brett-Einstellungen auf die ganze Seite anwenden (Farben und Größe über CSS, Verhalten über board.js)
   const st = db && db.settings;
   useEffect(() => {
@@ -106,7 +108,8 @@ function App() {
           return !mine || (r.version || 1) > localVersion(mine, r.id);
         })
         .map(r => r.id);
-      if (!need.length) return;
+      const found = { count: list.length };
+      if (!need.length) return found;
       const rows = await fetchCourses(need);
       const add = [];
       const patch = {}; // Änderungen an schon vorhandenen Kurs-Repertoires (Struktur und Lernstand bleiben)
@@ -141,7 +144,7 @@ function App() {
         if (hasKeys) p.keySolutions = row.key_solutions; // Lösungstexte kommen vom Kurs, nicht vom Nutzer
         patch[id] = p;
       }
-      if (!add.length && !Object.keys(patch).length) return;
+      if (!add.length && !Object.keys(patch).length) return found;
       update(c => {
         const have = new Set(c.repertoires.map(r => r.id));
         const fresh = add.filter(r => !have.has(r.id));
@@ -151,9 +154,21 @@ function App() {
           ...(fresh.length ? { sync: { ...c.sync, cardsPull: 0 } } : {}),
         };
       });
+      return found;
     } catch (err) {
       console.warn('Kurse konnten nicht geladen werden', err);
+      return null;
     }
+  };
+
+  /** Nach der ersten Anmeldung auf diesem Gerät: sagen, welche Kurse gefunden wurden (oder dass keiner da ist). */
+  const reportLogin = (acc, found) => {
+    if (!firstLogin.current) return;
+    if (!found) return setLoginNote({ kind: 'error' });
+    firstLogin.current = false;
+    const names = dbRef.current.repertoires.filter(r => isCourseId(r.id)).map(r => r.name);
+    if (!found.count) setLoginNote({ kind: 'none', email: acc.email });
+    else setLoginNote(names.length ? { kind: 'found', names } : null);
   };
 
   /** Gleicht mit dem Konto ab. -> true bei Erfolg */
@@ -162,6 +177,7 @@ function App() {
     if (!acc || !dbRef.current) return false;
     if (!navigator.onLine) {
       setSyncStatus('offline');
+      reportLogin(acc, null);
       return false;
     }
     if (syncing.current) {
@@ -176,10 +192,11 @@ function App() {
       await runSync({ getDb: () => dbRef.current, update: fn => update(fn, { fromSync: true }), remote, userId: acc.userId });
       setSyncStatus('idle');
       ok = true;
-      await preloadCourses();
+      reportLogin(acc, await preloadCourses());
     } catch (err) {
       console.error('Abgleich fehlgeschlagen', err);
       setSyncStatus('error');
+      reportLogin(acc, null);
     }
     syncing.current = false;
     if (again.current) {
@@ -194,6 +211,11 @@ function App() {
     setAccountState(s);
     if (!s) return;
     const d = dbRef.current;
+    // Erste Anmeldung mit diesem Konto auf diesem Gerät: gleich zeigen, dass die Kurse geholt werden
+    if (d && d.sync.userId !== s.userId && !firstLogin.current) {
+      firstLogin.current = true;
+      setLoginNote({ kind: 'loading' });
+    }
     // Daten eines anderen Kontos liegen noch auf dem Gerät: nicht vermischen
     if (d && d.sync.userId && d.sync.userId !== s.userId) {
       update({ repertoires: [], progress: {}, activity: { goal: 20, days: {} }, sync: emptySync() }, { fromSync: true });
@@ -290,6 +312,8 @@ function App() {
     setAccountState(null);
     update({ repertoires: [], progress: {}, activity: { goal: 20, days: {} }, sync: emptySync() }, { fromSync: true });
     setSyncStatus('idle');
+    firstLogin.current = false;
+    setLoginNote(null);
     setView({ name: 'home' });
     setShowAccount(false);
   };
@@ -432,14 +456,37 @@ function App() {
       train=${train}
       open=${repId => setView({ name: 'rep', repId })}
       go=${go}
+      account=${account}
+      openLogin=${cloudEnabled() ? () => setShowAccount(true) : null}
     />`;
   }
 
   const isHome = ['home', 'rep', 'train', 'edit', 'scrim'].includes(view.name);
   const inTools = view.name === 'games' || view.name === 'compare';
 
+  // Beim Lernen und in der Testpartie bleibt auf kleinen Bildschirmen nur eine schmale Kopfzeile (mehr Platz fürs Brett)
+  const slim = view.name === 'train' || view.name === 'scrim';
+  const note =
+    loginNote &&
+    html`<div class=${`login-note ${loginNote.kind}`} role="status">
+      ${loginNote.kind === 'loading' && html`<span>Du bist angemeldet. Deine Kurse werden geladen …</span>`}
+      ${loginNote.kind === 'found' &&
+      html`<span><b>✓ ${loginNote.names.length === 1 ? 'Dein Kurs ist' : `${loginNote.names.length} Kurse sind`} freigeschaltet:</b> ${loginNote.names.join(', ')}</span>
+        <button class="btn small" onClick=${() => { setLoginNote(null); go('home'); }}>Zu meinen Kursen</button>`}
+      ${loginNote.kind === 'none' &&
+      html`<span><b>Für ${loginNote.email} ist noch kein Kurs freigeschaltet.</b> Hast du mit einer anderen E-Mail-Adresse gekauft? Dann melde dich mit dieser an.
+          Direkt nach dem Kauf kann es ein paar Minuten dauern.${CONFIG.helpUrl ? html` <a href=${CONFIG.helpUrl} target="_blank" rel="noopener">Hilfe</a>` : ''}</span>
+        <span class="row">
+          <button class="btn small" onClick=${() => setShowAccount(true)}>Andere Adresse</button>
+          <button class="btn ghost small" onClick=${() => setLoginNote(null)}>Schließen</button>
+        </span>`}
+      ${loginNote.kind === 'error' &&
+      html`<span><b>Deine Kurse konnten gerade nicht geladen werden.</b> Prüfe deine Internetverbindung.</span>
+        <button class="btn small" onClick=${() => { setLoginNote({ kind: 'loading' }); doSync(); }}>Erneut versuchen</button>`}
+    </div>`;
+
   return html`
-    <header class="top">
+    <header class=${`top ${slim ? 'slim' : ''}`}>
       <div class="brand" onClick=${() => go('home')} title="Modern Chess Trainer"><img src="icons/logo-wordmark-trainer.png" alt="Modern Chess Trainer" /></div>
       <nav>
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
@@ -474,6 +521,7 @@ function App() {
       onSignOut=${doSignOut}
       onDelete=${doDelete}
     />`}
+    ${note}
     <main class=${view.name === 'edit' ? 'wide' : ''}>${body}</main>
     <footer class="foot">
       Brett und Schachlogik: <a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">chessground</a> und

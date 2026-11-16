@@ -4,6 +4,18 @@ import { html, useEffect, useRef, useState } from 'preact';
 export function Menu({ label, className = '', align = 'left', children }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
+  const list = useRef(null);
+
+  // Auf schmalen Bildschirmen: das Menü so verschieben, dass es ganz im Bild bleibt
+  useEffect(() => {
+    const el = list.current;
+    if (!open || !el) return;
+    el.style.transform = '';
+    const r = el.getBoundingClientRect();
+    const w = document.documentElement.clientWidth;
+    const dx = r.left < 8 ? 8 - r.left : r.right > w - 8 ? w - 8 - r.right : 0;
+    if (dx) el.style.transform = `translateX(${Math.round(dx)}px)`;
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -21,7 +33,7 @@ export function Menu({ label, className = '', align = 'left', children }) {
     <button class=${`menu-btn ${className} ${open ? 'on' : ''}`} aria-haspopup="true" aria-expanded=${open} onClick=${() => setOpen(!open)}>
       ${label} <span class="caret" aria-hidden="true">▾</span>
     </button>
-    ${open && html`<div class=${`menu-list ${align}`} role="menu" onClick=${() => setOpen(false)}>${children}</div>`}
+    ${open && html`<div ref=${list} class=${`menu-list ${align}`} role="menu" onClick=${() => setOpen(false)}>${children}</div>`}
   </div>`;
 }
 

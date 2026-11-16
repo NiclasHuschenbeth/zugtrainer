@@ -4,6 +4,10 @@ export const CONFIG = {
   sourceUrl: 'https://github.com/NiclasHuschenbeth/zugtrainer',
   impressumUrl: 'https://modernchess.de/impressum/',
   datenschutzUrl: 'https://modernchess.de/datenschutz/',
+  // Kursübersicht für Besucher ohne Kauf (erster Bildschirm)
+  shopUrl: 'https://modernchess.de/',
+  // Hilfe- oder Kontaktseite, verlinkt, wenn nach der Anmeldung kein Kurs gefunden wird. Leer = kein Link.
+  helpUrl: '',
   // Konten und Abgleich (Supabase). Der öffentliche Schlüssel ist für Webseiten gedacht und kein Geheimnis;
   // geschützt sind die Daten durch Zugriffsregeln in der Datenbank (siehe tools/supabase-schema.sql).
   supabaseUrl: 'https://tzfxrvrbskpqamsxktdi.supabase.co',

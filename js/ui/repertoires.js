@@ -6,6 +6,7 @@ import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
 import { RangeSlider, rangeLabel } from './rangeslider.js';
 import { HomeReco } from './reco.js';
+import { CONFIG } from '../config.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -80,15 +81,19 @@ function Home({ db, setGoal, train }) {
   </div>`;
 }
 
-export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go }) {
+const addSample = addRepertoire => addRepertoire({ name: SAMPLE_NAME, color: SAMPLE_COLOR, chapters: parseRepertoirePgn(SAMPLE_PGN) });
+
+export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin }) {
+  const [uploadOpen, setUploadOpen] = useState(false);
   const reps = color => db.repertoires.filter(r => r.color === color);
   const hasProgress = Object.values(db.progress).some(p => Object.keys(p).length > 0);
   const onboarding = !db.settings.onboarded && !db.sync.last;
   if (onboarding) {
     const step = db.repertoires.length === 0 ? 1 : hasProgress ? 3 : 2;
     return html`<div class="stack">
-      <${Onboarding} step=${step} rep=${db.repertoires[0]} train=${train} goal=${db.activity.goal} setGoal=${setGoal} finish=${() => setSettings({ onboarded: true })} />
-      ${step === 1 && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${false} />`}
+      <${Onboarding} step=${step} rep=${db.repertoires[0]} train=${train} goal=${db.activity.goal} setGoal=${setGoal} finish=${() => setSettings({ onboarded: true })}
+        account=${account} openLogin=${openLogin} sample=${() => addSample(addRepertoire)} upload=${() => setUploadOpen(!uploadOpen)} uploadOpen=${uploadOpen} shopUrl=${CONFIG.shopUrl} />
+      ${step === 1 && uploadOpen && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${false} noSample=${true} />`}
     </div>`;
   }
   const showInstall = (db.settings.lessons || 0) >= 1 && !db.settings.installHint;
@@ -105,6 +110,10 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
     <${HomeReco} db=${db} setSettings=${setSettings} go=${go} />
     <${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${db.repertoires.length > 0} />
     ${db.repertoires.length === 0 && html`<p class="muted center">Noch kein Repertoire vorhanden. Lade eine PGN-Datei hoch oder probiere das Beispiel aus.</p>`}
+    ${db.repertoires.length === 0 && openLogin && !account && html`<div class="card reco-hint">
+      <span><b>Kurs gekauft?</b> Melde dich mit deiner Kauf-E-Mail an, dann erscheinen deine Kurse automatisch.</span>
+      <button class="btn primary" onClick=${openLogin}>Anmelden</button>
+    </div>`}
     ${group('Repertoires mit Weiß', reps('white'))}
     ${group('Repertoires mit Schwarz', reps('black'))}
   </div>`;
@@ -259,7 +268,7 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
   </div>`;
 }
 
-function Upload({ addRepertoire, newRepertoire, hasAny }) {
+function Upload({ addRepertoire, newRepertoire, hasAny, noSample }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState('white');
   const [text, setText] = useState('');
@@ -296,7 +305,7 @@ function Upload({ addRepertoire, newRepertoire, hasAny }) {
   };
 
   const sample = () => {
-    addRepertoire({ name: SAMPLE_NAME, color: SAMPLE_COLOR, chapters: parseRepertoirePgn(SAMPLE_PGN) });
+    addSample(addRepertoire);
     setOpen(false);
   };
 
@@ -332,7 +341,7 @@ function Upload({ addRepertoire, newRepertoire, hasAny }) {
     <div class="row">
       <button class="btn primary" type="submit">Repertoire hinzufügen</button>
       <button class="btn" type="button" onClick=${() => newRepertoire(color)}>Leeres Repertoire im Editor anlegen</button>
-      <button class="btn" type="button" onClick=${sample}>Beispiel-Repertoire laden</button>
+      ${!noSample && html`<button class="btn" type="button" onClick=${sample}>Beispiel-Repertoire laden</button>`}
       ${hasAny && html`<button class="btn ghost" type="button" onClick=${() => setOpen(false)}>Abbrechen</button>`}
     </div>
   </form>`;

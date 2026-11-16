@@ -10,7 +10,7 @@ const GOALS = [
 ];
 
 /** Erststart in drei Schritten: Repertoire laden, erste Linie lernen, Tagesziel wählen. */
-export function Onboarding({ step, rep, train, goal, setGoal, finish }) {
+export function Onboarding({ step, rep, train, goal, setGoal, finish, account, openLogin, sample, upload, uploadOpen, shopUrl }) {
   return html`<div class="card onboarding">
     <div class="steps" aria-label=${`Schritt ${step} von 3`}>
       ${STEPS.map((t, i) => html`<div class=${`step ${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}`}>
@@ -21,15 +21,25 @@ export function Onboarding({ step, rep, train, goal, setGoal, finish }) {
     ${step === 1 &&
     html`<div class="stack tight">
       <h1>Willkommen beim Modern Chess Trainer</h1>
-      <p>In drei kurzen Schritten bist du startklar. Zuerst brauchst du ein Repertoire: die PGN-Datei zu deinem Kurs. Eine PGN-Datei ist die Datei, in der alle Varianten gespeichert sind.</p>
-      <details class="howto">
-        <summary>Wo bekomme ich die PGN-Datei?</summary>
-        <ul>
-          <li><b>Aus deinem Modern-Chess-Kurs:</b> Lade die PGN-Datei aus den Kursmaterialien (Downloads) auf dein Gerät.</li>
-          <li><b>Aus einer Lichess-Studie:</b> Öffne die Studie, wähle im Menü „Als PGN herunterladen“ (bzw. „Study PGN“).</li>
-          <li><b>Aus ChessBase:</b> Datenbank markieren, „Speichern unter“ und als PGN exportieren.</li>
-        </ul>
-      </details>
+      <p>Hier lernst du deine Eröffnungen Zug für Zug und wiederholst sie, bevor du sie vergisst. Womit möchtest du starten?</p>
+      <div class="start-options">
+        ${openLogin &&
+        (account
+          ? html`<div class="start-opt main"><b>Du bist angemeldet</b><span>Deine Kurse werden geladen …</span></div>`
+          : html`<button class="start-opt main" onClick=${openLogin}>
+              <b>Ich habe einen Kurs gekauft</b>
+              <span>Melde dich mit der E-Mail-Adresse an, mit der du gekauft hast. Deine Kurse erscheinen automatisch.</span>
+            </button>`)}
+        <button class="start-opt" onClick=${sample}>
+          <b>Erst einmal ausprobieren</b>
+          <span>Lädt ein kleines Beispiel-Repertoire mit 1.e4, ohne Anmeldung.</span>
+        </button>
+        <button class=${`start-opt ${uploadOpen ? 'on' : ''}`} aria-expanded=${uploadOpen} onClick=${upload}>
+          <b>Eigene PGN-Datei hochladen</b>
+          <span>Zum Beispiel der Export einer Lichess-Studie oder aus ChessBase.</span>
+        </button>
+      </div>
+      ${shopUrl && html`<p class="small"><a href=${shopUrl} target="_blank" rel="noopener">Kurse von Modern Chess ansehen ↗</a></p>`}
     </div>`}
 
     ${step === 2 &&

@@ -42,7 +42,8 @@ export function gradeCard(card, ok, mode, now = Date.now()) {
   return { level, due: now + INTERVALS[level], lapses: prev.lapses + (ok ? 0 : 1), at: now };
 }
 
-// Lernauswahl: 'all' | 'prio' | 'lesson:<Name>' -> Menge der Kapitel-Nummern (null = alle)
+// Lernauswahl: 'all' | 'order' | 'prio' | 'lesson:<Name>' | 'ch:0,3,7' (einzelne Kapitel) -> Menge der Kapitel-Nummern (null = alle)
+export const chapterScope = indices => 'ch:' + [...indices].sort((a, b) => a - b).join(',');
 export const hasPriority = rep => rep.chapters.some(c => c.priority);
 export const lessonsOf = rep => [...new Set(rep.chapters.map(c => c.lesson).filter(Boolean))];
 export const scopeOf = (settings, rep) => (settings.scopes && settings.scopes[rep.id]) || 'all';
@@ -50,6 +51,13 @@ export const keyScopeOf = (settings, rep) => (settings.keyScopes && settings.key
 export function scopeChapters(rep, scope) {
   if (!scope || scope === 'all') return null;
   const set = new Set();
+  if (scope.startsWith('ch:')) {
+    for (const t of scope.slice(3).split(',')) {
+      const i = parseInt(t, 10);
+      if (i >= 0 && i < rep.chapters.length) set.add(i);
+    }
+    return set.size ? set : null;
+  }
   rep.chapters.forEach((c, i) => {
     if (scope === 'prio' ? c.priority : scope.startsWith('lesson:') && c.lesson === scope.slice(7)) set.add(i);
   });

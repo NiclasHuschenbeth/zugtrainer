@@ -26,7 +26,9 @@ const sameChapters = (a, b) => a.length === b.length && a.every((c, i) => c.name
 const dropRanges = (settings, ids) => {
   const ranges = { ...(settings.ranges || {}) };
   ids.forEach(id => delete ranges[id]);
-  return { ...settings, ranges, updatedAt: Date.now() };
+  // Eine Auswahl einzelner Kapitel hängt ebenfalls an den Kapitelnummern
+  const clean = map => Object.fromEntries(Object.entries(map || {}).filter(([id, v]) => !(ids.includes(id) && String(v).startsWith('ch:'))));
+  return { ...settings, ranges, scopes: clean(settings.scopes), keyScopes: clean(settings.keyScopes), updatedAt: Date.now() };
 };
 
 // Installations-Hinweis (Chrome/Android): Ereignis früh abfangen, die Oberfläche zeigt es später an

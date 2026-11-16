@@ -35,6 +35,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit 
   const arrows = settings.varArrows !== false;
   const cg = useRef(null);
   const timer = useRef(null);
+  const dirty = useRef(false); // nur speichern, wenn wirklich etwas geändert wurde (wichtig für Kurse: "bearbeitet" oder nicht)
 
   useEffect(() => {
     if (focus !== 'coverage') return;
@@ -48,13 +49,14 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit 
   // Änderungen am Arbeitsstand speichern (leicht verzögert, damit Tippen flüssig bleibt)
   const commit = () => {
     force();
+    dirty.current = true;
     clearTimeout(timer.current);
     timer.current = setTimeout(() => saveRep({ ...w }), 400);
   };
   useEffect(
     () => () => {
       clearTimeout(timer.current);
-      saveRep({ ...w });
+      if (dirty.current) saveRep({ ...w });
     },
     [],
   );

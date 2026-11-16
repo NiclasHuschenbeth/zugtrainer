@@ -22,6 +22,14 @@ import { emptySync, isCourseId, runSync } from './lib/sync.js';
 
 const SYNC_KEYS = ['repertoires', 'progress', 'activity', 'settings', 'sync'];
 
+// Kurs-Aktualisierung: gleiche Kapitel in gleicher Reihenfolge? Sonst passen eigene Zugbereiche pro Kapitel nicht mehr.
+const sameChapters = (a, b) => a.length === b.length && a.every((c, i) => c.name === b[i].name);
+const dropRanges = (settings, ids) => {
+  const ranges = { ...(settings.ranges || {}) };
+  ids.forEach(id => delete ranges[id]);
+  return { ...settings, ranges, updatedAt: Date.now() };
+};
+
 // Installations-Hinweis (Chrome/Android): Ereignis früh abfangen, die Oberfläche zeigt es später an
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
@@ -57,6 +65,8 @@ function App() {
   const [showBoard, setShowBoard] = useState(false);
   const [loginNote, setLoginNote] = useState(null); // Rückmeldung nach der Anmeldung: loading | found | none | error
   const firstLogin = useRef(false);
+  const [courseNote, setCourseNote] = useState(null); // Namen gerade aktualisierter Kurse
+  const [courseBusy, setCourseBusy] = useState(null);
   // Brett-Einstellungen auf die ganze Seite anwenden (Farben und Größe über CSS, Verhalten über board.js)
   const st = db && db.settings;
   useEffect(() => {
@@ -124,6 +134,8 @@ function App() {
       const rows = await fetchCourses(need);
       const add = [];
       const back = {}; // wieder freigeschaltete Kurse: Inhalt neu anlegen, Lernstand ist noch da
+      const updated = []; // Namen der Kurse, deren Inhalt gerade ausgetauscht wurde
+      const reset = []; // Kurse, deren Kapitel sich verschoben haben: eigene Zugbereiche pro Kapitel passen nicht mehr
       const patch = {}; // Änderungen an schon vorhandenen Kurs-Repertoires (Struktur und Lernstand bleiben)
       for (const row of rows) {
         const id = 'course-' + row.id;
@@ -142,6 +154,7 @@ function App() {
             ...(hasKeys ? { keySolutions: row.key_solutions } : {}),
             ...(hasVideos ? { videos: row.videos } : {}),
             courseVersion: version,
+            pristine: true,
             createdAt: mine ? mine.createdAt : Date.now(),
             updatedAt: Date.now(),
           };
@@ -150,8 +163,17 @@ function App() {
           continue;
         }
         const p = { courseVersion: version };
-        if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
-          p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
+        if (mine.pristine === true && fresh.length) {
+          // Vom Nutzer nie bearbeitet: Inhalt austauschen. Der Lernstand hängt an Stellung und Zug und bleibt erhalten.
+          if (!sameChapters(mine.chapters, fresh)) reset.push(id);
+          p.chapters = fresh;
+          updated.push(row.name || mine.name);
+        } else {
+          // Bearbeitet (oder unbekannt, weil älter als dieser Merker): nur Namen angleichen und die neue Fassung anbieten
+          if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
+            p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
+          }
+          if (fresh.length) p.updateAvailable = version;
         }
         if (hasVideos) p.videos = row.videos;
         if (row.color) p.color = row.color;
@@ -166,13 +188,42 @@ function App() {
           repertoires: [...c.repertoires.map(r => (back[r.id] ? back[r.id] : patch[r.id] ? { ...r, ...patch[r.id], updatedAt: Date.now() } : r)), ...fresh],
           // Neu angelegte Kurse: den Lernfortschritt aus dem Konto beim nächsten Abgleich vollständig nachladen
           ...(fresh.length || Object.keys(back).length ? { sync: { ...c.sync, cardsPull: 0 } } : {}),
+          ...(reset.length ? { settings: dropRanges(c.settings, reset) } : {}),
         };
       });
+      if (updated.length) setCourseNote(updated);
       return found;
     } catch (err) {
       console.warn('Kurse konnten nicht geladen werden', err);
       return null;
     }
+  };
+
+  /** Nutzer nimmt die neue Fassung eines selbst bearbeiteten Kurses an (yes) oder behält seine eigene. */
+  const answerCourseUpdate = async (id, yes) => {
+    if (!yes) return update(c => ({ repertoires: c.repertoires.map(r => (r.id === id ? { ...r, updateAvailable: undefined } : r)) }));
+    setCourseBusy(id);
+    try {
+      const [row] = await fetchCourses([id.slice('course-'.length)]);
+      const fresh = row ? parseRepertoirePgn(String(row.pgn || '').replace(/^\uFEFF/, '')) : [];
+      if (!fresh.length) throw new Error('leer');
+      update(c => {
+        const mine = c.repertoires.find(r => r.id === id);
+        if (!mine) return {};
+        const next = { ...mine, chapters: fresh, courseVersion: row.version || 1, pristine: true, updateAvailable: undefined, updatedAt: Date.now() };
+        if (row.key_solutions && Object.keys(row.key_solutions).length) next.keySolutions = row.key_solutions;
+        if (row.videos && Object.keys(row.videos).length) next.videos = row.videos;
+        return {
+          repertoires: c.repertoires.map(r => (r.id === id ? next : r)),
+          ...(sameChapters(mine.chapters, fresh) ? {} : { settings: dropRanges(c.settings, [id]) }),
+        };
+      });
+      setCourseNote([row.name]);
+    } catch (err) {
+      console.warn('Kurs konnte nicht aktualisiert werden', err);
+      alert('Die neue Fassung konnte gerade nicht geladen werden. Bitte später noch einmal versuchen.');
+    }
+    setCourseBusy(null);
   };
 
   /** Nach der ersten Anmeldung auf diesem Gerät: sagen, welche Kurse gefunden wurden (oder dass keiner da ist). */
@@ -368,7 +419,9 @@ function App() {
     setView({ name: 'edit', repId: id });
   };
 
-  const saveRep = rep => update(cur => ({ repertoires: cur.repertoires.map(r => (r.id === rep.id ? { ...rep, updatedAt: Date.now() } : r)) }));
+  // Kurse: merken, dass der Nutzer den Inhalt selbst verändert hat (dann wird vor einer Kurs-Aktualisierung gefragt)
+  const saveRep = rep =>
+    update(cur => ({ repertoires: cur.repertoires.map(r => (r.id === rep.id ? { ...rep, ...(isCourseId(rep.id) ? { pristine: false } : {}), updatedAt: Date.now() } : r)) }));
 
   const removeRepertoire = id =>
     update(cur => {
@@ -558,6 +611,24 @@ function App() {
       onDelete=${doDelete}
     />`}
     ${note}
+    ${courseNote &&
+    html`<div class="login-note found" role="status">
+      <span><b>${courseNote.length === 1 ? `Der Kurs „${courseNote[0]}“ wurde` : `${courseNote.length} Kurse wurden`} aktualisiert.</b>${courseNote.length > 1 ? ' ' + courseNote.join(', ') + '.' : ''} Dein Lernfortschritt ist erhalten geblieben.</span>
+      <button class="btn ghost small" onClick=${() => setCourseNote(null)}>Schließen</button>
+    </div>`}
+    ${['home', 'rep'].includes(view.name) &&
+    db.repertoires
+      .filter(r => r.updateAvailable && !r.locked)
+      .map(
+        r => html`<div class="login-note" role="status" key=${r.id}>
+          <span><b>Für „${r.name}“ gibt es eine neue Fassung.</b> ${r.pristine === false ? 'Du hast diesen Kurs selbst bearbeitet. ' : ''}Falls du in diesem Kurs im Editor
+            etwas geändert hast, geht das beim Aktualisieren verloren. Dein Lernfortschritt bleibt.</span>
+          <span class="row">
+            <button class="btn primary small" disabled=${courseBusy === r.id} onClick=${() => answerCourseUpdate(r.id, true)}>${courseBusy === r.id ? 'Lädt …' : 'Aktualisieren'}</button>
+            <button class="btn ghost small" disabled=${courseBusy === r.id} onClick=${() => answerCourseUpdate(r.id, false)}>Meine Fassung behalten</button>
+          </span>
+        </div>`,
+      )}
     <main class=${view.name === 'edit' ? 'wide' : ''}>${body}</main>
     <footer class="foot">
       Brett und Schachlogik: <a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">chessground</a> und

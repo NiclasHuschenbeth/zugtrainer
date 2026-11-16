@@ -12,9 +12,9 @@ import { Board } from './board.js';
  * Wiederholungsplan wie bei den Linien, aber als eigene Karten (Schlüssel "K:…").
  * Am Ende: verpasste Stellungen gezielt nochmal üben (ohne neue Bewertung).
  */
-export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onExit, onMore }) {
+export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onExit, onMore, only, next: nextRep }) {
   const first = useMemo(
-    () => buildKeyTasks(rep, progress, { scope: keyScopeOf(settings, rep), size: 0, shuffle: settings.keyShuffle !== false }),
+    () => buildKeyTasks(rep, progress, { scope: keyScopeOf(settings, rep), size: 0, shuffle: settings.keyShuffle !== false, only }),
     [],
   );
   const cgRef = useRef(null);
@@ -168,7 +168,8 @@ export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onEx
             </div>
             <div class="row">
               ${missed.length > 0 && html`<button class="btn accent" onClick=${redoMissed}>Fehler nochmal üben (${missed.length})</button>`}
-              <button class="btn primary" onClick=${onMore}>Weitere Stellungen</button>
+              ${nextRep && html`<button class="btn primary" onClick=${nextRep.go}>Weiter mit „${nextRep.name}“ (${nextRep.due} fällig)</button>`}
+              <button class=${`btn ${nextRep ? '' : 'primary'}`} onClick=${onMore}>Weitere Stellungen</button>
               <button class="btn" onClick=${onExit}>Zurück zur Übersicht</button>
             </div>
           </div>`

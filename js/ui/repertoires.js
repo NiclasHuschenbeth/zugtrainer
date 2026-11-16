@@ -23,6 +23,41 @@ function Ring({ value, max }) {
   </svg>`;
 }
 
+const KEY_FRESH = 10; // so viele neue Schlüsselstellungen pro Sitzung von der Startseite aus
+
+/**
+ * Startseite: fällige Schlüsselstellungen, eine Zeile pro Kurs.
+ * Fällig = schon geübt und jetzt wieder dran (neue zählen nicht). Ist in einem Kurs nichts fällig, werden neue angeboten.
+ */
+function KeyCard({ db, train }) {
+  const rows = db.repertoires
+    .map(rep => ({ rep, s: keyStats(rep, db.progress[rep.id] || {}, keyScopeOf(db.settings, rep)) }))
+    .filter(x => x.s.total > 0 || x.s.due > 0)
+    .sort((a, b) => b.s.due - a.s.due);
+  if (!rows.length) return null;
+  const due = rows.reduce((n, x) => n + x.s.due, 0);
+  return html`<div class="card keycard">
+    <div class="row between">
+      <div class="eyebrow">Schlüsselstellungen</div>
+      <div class="muted small">${due ? `${due} fällig` : 'Nichts fällig'}</div>
+    </div>
+    ${rows.map(({ rep, s }) => {
+      const n = Math.min(KEY_FRESH, s.fresh);
+      return html`<div class="keyrow" key=${rep.id}>
+        <div class="grow">
+          <b>${rep.name}</b>
+          <div class="muted small">${s.due ? html`<b class="keydue">${s.due} fällig</b>` : s.fresh ? 'nichts fällig' : 'nichts fällig, alle Stellungen sind in der Wiederholung'}${s.fresh ? ` · ${s.fresh} neu` : ''}</div>
+        </div>
+        ${s.due
+          ? html`<button class="btn primary" onClick=${() => train(rep.id, 'keys', null, 'due')}>Jetzt üben</button>`
+          : n > 0
+            ? html`<button class="btn" onClick=${() => train(rep.id, 'keys', null, 'fresh')}>${n === 1 ? '1 neue Stellung' : `${n} neue Stellungen`} lernen</button>`
+            : null}
+      </div>`;
+    })}
+  </div>`;
+}
+
 /** Oben auf der Startseite: Was ist heute fällig, Tagesziel, Serie. */
 function Home({ db, setGoal, train }) {
   const a = db.activity;
@@ -70,6 +105,8 @@ function Home({ db, setGoal, train }) {
       <div class="small">${streak === 1 ? 'Tag' : 'Tage'} in Folge</div>
       <div class="small hint">${done ? 'Tagesziel erreicht!' : streak > 0 ? 'Heute noch trainieren, um die Serie zu halten.' : 'Erreiche dein Tagesziel, um eine Serie zu starten.'}</div>
     </div>
+
+    <${KeyCard} db=${db} train=${train} />
 
     <div class="week-mini" title="Abgefragte Züge der letzten 7 Tage">
       <span class="muted small">Letzte 7 Tage</span>
@@ -229,6 +266,7 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
             ${keyOptions.map(o => html`<option value=${o.v}>${o.t} (${o.n.total})</option>`)}
           </select>
         </label>
+        ${keyOptions.length > 1 && html`<div class="muted small">Die Auswahl gilt für neue Stellungen. Schon geübte werden weiter wiederholt.</div>`}
       </div>`}
       <div class="depth">
         <div class="row between">

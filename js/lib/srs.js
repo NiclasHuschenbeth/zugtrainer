@@ -59,27 +59,35 @@ export function scopeChapters(rep, scope) {
 /** Schlüsselstellungen im gewählten Bereich: Anzahl, fällige und neue. */
 export function keyStats(rep, progress, scope = null, now = Date.now()) {
   const sc = scopeChapters(rep, scope);
-  const list = derived(rep).keyPositions.filter(k => !sc || sc.has(k.chapter));
+  const all = derived(rep).keyPositions;
+  let total = 0;
   let due = 0;
   let fresh = 0;
-  for (const k of list) {
+  for (const k of all) {
+    const inScope = !sc || sc.has(k.chapter);
+    if (inScope) total++;
     const c = progress[k.id];
-    if (!c) fresh++;
+    // Die Auswahl gilt nur für neue Stellungen. Schon geübte bleiben in der Wiederholung, egal welche Auswahl.
+    if (!c) fresh += inScope ? 1 : 0;
     else if (c.due <= now) due++;
   }
-  return { total: list.length, due, fresh };
+  return { total, due, fresh };
 }
 
-/** Aufgaben einer Schlüsselstellungen-Sitzung: erst fällige, dann neue (Prioritäten zuerst). */
+/**
+ * Aufgaben einer Schlüsselstellungen-Sitzung: erst fällige, dann neue (Prioritäten zuerst).
+ * only: 'due' = nur fällige, 'fresh' = nur neue (höchstens freshSize). Die Auswahl (scope) gilt nur für neue.
+ */
 export function buildKeyTasks(rep, progress, opts = {}) {
-  const { scope = null, size = 10, shuffle = false, now = Date.now() } = opts;
+  const { scope = null, size = 10, shuffle = false, now = Date.now(), only = null, freshSize = 10 } = opts;
   const sc = scopeChapters(rep, scope);
-  const list = derived(rep).keyPositions.filter(k => !sc || sc.has(k.chapter));
-  const due = list.filter(k => progress[k.id] && progress[k.id].due <= now).sort((a, b) => progress[a.id].due - progress[b.id].due);
-  let fresh = list.filter(k => !progress[k.id]);
+  const all = derived(rep).keyPositions;
+  const due = only === 'fresh' ? [] : all.filter(k => progress[k.id] && progress[k.id].due <= now).sort((a, b) => progress[a.id].due - progress[b.id].due);
+  let fresh = only === 'due' ? [] : all.filter(k => !progress[k.id] && (!sc || sc.has(k.chapter)));
   if (hasPriority(rep) && scope !== 'order') {
     fresh = fresh.map((k, n) => ({ k, n })).sort((a, b) => (rep.chapters[a.k.chapter].priority ? 0 : 1) - (rep.chapters[b.k.chapter].priority ? 0 : 1) || a.n - b.n).map(x => x.k);
   }
+  if (only === 'fresh') fresh = fresh.slice(0, freshSize);
   let pick = [...due, ...fresh];
   if (size > 0) pick = pick.slice(0, size);
   if (shuffle) {

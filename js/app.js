@@ -1,7 +1,7 @@
 import { html, render, useEffect, useRef, useState } from 'preact';
 import { INITIAL_FEN } from 'chessops/fen.js';
 import { kvSet, loadAll } from './lib/storage.js';
-import { dayKey, gradeCard } from './lib/srs.js';
+import { dayKey, gradeCard, keyStats } from './lib/srs.js';
 import { positionVisits } from './lib/analysis.js';
 import { finishLogin } from './lib/lichess.js';
 import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
@@ -383,7 +383,18 @@ function App() {
   const rep = view.repId ? db.repertoires.find(r => r.id === view.repId) : null;
   let body;
   if (view.name === 'train' && rep && view.mode === 'keys') {
+    // Von der Startseite gestartet (nur fällige): am Ende den nächsten Kurs mit fälligen Stellungen anbieten
+    const only = view.focusKey === 'due' || view.focusKey === 'fresh' ? view.focusKey : null;
+    const other =
+      only === 'due' &&
+      db.repertoires
+        .filter(r => r.id !== rep.id)
+        .map(r => ({ r, due: keyStats(r, db.progress[r.id] || {}).due }))
+        .filter(x => x.due > 0)
+        .sort((a, b) => b.due - a.due)[0];
     body = html`<${KeyTrainer}
+      only=${only}
+      next=${other ? { name: other.r.name, due: other.due, go: () => train(other.r.id, 'keys', null, 'due', view.backTo) } : null}
       key=${view.nonce}
       rep=${rep}
       progress=${db.progress[rep.id] || {}}

@@ -523,7 +523,8 @@ function App() {
       db=${vdb}
       rep=${rep}
       train=${train}
-      edit=${(id, focus) => setView({ name: 'edit', repId: id, focus, backTo: here })}
+      edit=${id => setView({ name: 'edit', repId: id, backTo: here })}
+      editAt=${(id, at) => setView({ name: 'edit', repId: id, at, backTo: here })}
       scrim=${id => setView({ name: 'scrim', repId: id, backTo: here })}
       compare=${r => {
         setSettings({ compare: { ...db.settings.compare, [r.color]: r.id } });
@@ -559,7 +560,7 @@ function App() {
   const inTools = view.name === 'games' || view.name === 'compare';
 
   // Beim Lernen und in der Testpartie bleibt auf kleinen Bildschirmen nur eine schmale Kopfzeile (mehr Platz fürs Brett)
-  const slim = view.name === 'train' || view.name === 'scrim';
+  const slim = ['train', 'scrim', 'edit', 'analyse'].includes(view.name);
   const note =
     loginNote &&
     html`<div class=${`login-note ${loginNote.kind}`} role="status">

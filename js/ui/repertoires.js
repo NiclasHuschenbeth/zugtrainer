@@ -7,6 +7,7 @@ import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
 import { RangeSlider, rangeLabel } from './rangeslider.js';
 import { HomeReco } from './reco.js';
+import { CoveragePanel } from './editor.js';
 import { CONFIG } from '../config.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -234,7 +235,7 @@ export function RepertoireView(props) {
   </div>`;
 }
 
-function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, scrim, compare, remove, back }) {
+function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, editAt, scrim, compare, remove, back }) {
   const scope = scopeOf(db.settings, rep);
   const lessons = lessonsOf(rep);
   const prio = hasPriority(rep);
@@ -298,7 +299,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
         </div>
         <${Menu} label="Werkzeuge" className="btn" align="right">
           <${MenuItem} title="Editor" hint="Züge, Varianten und Kommentare bearbeiten" onClick=${() => edit(rep.id)} />
-          <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch?" onClick=${() => edit(rep.id, 'coverage')} />
+          <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch? (unten auf dieser Seite)" onClick=${() => { const el = document.getElementById('coverage-panel'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} />
           ${ksAll.length > 0 && html`<${MenuItem} title="Lösungstexte laden" hint="Erklärungen zu den Schlüsselstellungen aus einer .json-Datei des Kurses" onClick=${pickSolutions} />`}
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
           <${MenuItem} title="Meine Partien auswerten" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
@@ -367,6 +368,8 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
         </div>`}`)}`)}
       </div>
     </div>
+
+    <${CoveragePanel} rep=${rep} settings=${db.settings} setSettings=${setSettings} onJump=${(ci, path) => editAt(rep.id, { ci, path })} />
   </div>`;
 }
 

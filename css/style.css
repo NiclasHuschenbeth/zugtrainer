@@ -534,6 +534,58 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 /* Handy: direkt unter "Heute fällig", vor Tagesziel und Serie */
 @media (max-width: 820px) { .home-top .keycard { order: 1; } .home-top .stat { order: 2; } .home-top .week-mini { order: 3; } }
 
+/* Editor und Analyse: Brett links, rechts Kopf, Züge und Reiter. Die Seite ist so hoch wie das Fenster, nur Zugliste und Info-Bereich rollen. */
+main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
+.editor.v2 { --ed-h: max(500px, calc(100vh - 78px)); height: var(--ed-h); grid-template-columns: minmax(0, min(680px, calc(var(--ed-h) - 52px))) minmax(340px, 1fr); align-items: stretch; }
+@supports (height: 100dvh) { .editor.v2 { --ed-h: max(500px, calc(100dvh - 78px)); } }
+.editor.v2 .editor-board { min-width: 0; }
+.editor.v2 .editor-side { height: 100%; min-height: 0; gap: 10px; }
+.editor.v2 .card { padding: 12px 14px; gap: .5rem; }
+/* Kopf in einer Zeile: Name, Kapitelauswahl, Knöpfe */
+.ed-head { order: 0; flex: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem .7rem; }
+.ed-head > .row.between { display: contents; }
+.ed-head > select { order: 1; flex: 1 1 180px; min-width: 0; width: auto; }
+.ed-head > .row.between > .row { order: 2; flex: none; }
+.ed-head .ed-more { order: 3; flex: 1 1 100%; }
+.ed-head .ed-title { max-width: 40%; }
+.ed-title { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ed-head .btn.on { border-color: var(--primary); color: var(--primary); }
+.ed-more { border-top: 1px solid var(--line); padding-top: .6rem; max-height: 40vh; overflow: auto; }
+.ed-moves { order: 1; flex: 1 1 0; min-height: 190px; overflow: hidden; }
+.ed-moves .tree-wrap { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: .3rem; }
+.ed-moves .tree-wrap .link { align-self: flex-start; flex: none; }
+.ed-moves .tree { flex: 1 1 0; max-height: none; min-height: 60px; }
+.ed-moves .node-tools { flex: none; gap: .35rem; padding-top: .5rem; }
+.ed-moves .node-tools .row { gap: .3rem; align-items: center; }
+.ed-moves .node-tools .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .2rem; }
+.ed-moves .btn.glyph { min-width: 1.9rem; padding: .15rem .3rem; font-size: .8rem; min-height: 0; }
+.ed-tabs { order: 2; flex: none; padding-bottom: 0; border-bottom: 0; }
+.ed-tabs button { padding: .35rem .8rem; }
+.ed-tabs .only-narrow { display: none; }
+.ed-info { order: 3; flex: 0 1 auto; min-height: 110px; max-height: 38%; overflow: auto; }
+.ed-info .card { border: 0; box-shadow: none; padding: 0; background: none; }
+.ed-pane[hidden] { display: none; }
+.editor.v2 .off { display: none; }
+.link.danger { color: var(--bad); }
+.link:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.pv span { white-space: nowrap; }
+@media (max-width: 820px) {
+  .editor.v2 { height: auto; display: block; }
+  /* Das Brett bleibt beim Scrollen oben stehen: man kann immer ziehen */
+  .editor.v2 .editor-board { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 6px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .editor.v2 .editor-side { height: auto; margin-top: 8px; }
+  .ed-tabs { order: 1; position: sticky; z-index: 4; }
+  .ed-tabs .only-narrow { display: inline-block; }
+  .ed-tabs { gap: 0; }
+  .ed-tabs button { padding: .35rem .5rem; font-size: .92rem; }
+  .ed-head .ed-title { max-width: 100%; flex: 1 1 100%; }
+  .ed-moves, .ed-info { order: 2; flex: none; min-height: 0; overflow: visible; }
+  .ed-moves .tree-wrap { flex: none; display: block; }
+  .ed-moves .tree { flex: none; max-height: 34vh; }
+  .ed-moves .btn.glyph { min-height: 36px; min-width: 2.3rem; }
+  .editor.v2 .nav .btn { min-height: 40px; }
+}
+
 /* Startseite: Tagesstreifen und Repertoires als Zeilen */
 .card.today { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem 1.2rem; padding: 12px 18px; }
 .today-nums { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; align-items: center; font-variant-numeric: lining-nums tabular-nums; }

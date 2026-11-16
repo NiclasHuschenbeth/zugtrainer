@@ -18,6 +18,19 @@ const GLYPHS = ['!', '?', '!!', '??', '!?', '?!'];
 const POS = [['=', 'ausgeglichen'], ['∞', 'unklar'], ['⩲', 'Weiß steht etwas besser'], ['⩱', 'Schwarz steht etwas besser'], ['±', 'Weiß steht besser'], ['∓', 'Schwarz steht besser'], ['+−', 'Weiß steht auf Gewinn'], ['−+', 'Schwarz steht auf Gewinn']];
 const annotated = n => !!(n.comment || (n.shapes && n.shapes.length));
 
+const NARROW = '(max-width: 820px)';
+/** Schmaler Bildschirm (Handy)? Dort ist die Zugliste ein eigener Reiter. */
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = matchMedia(NARROW);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
+}
+
 export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free }) {
   const work = useRef(null);
   if (!work.current) work.current = structuredClone(rep);
@@ -32,19 +45,13 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
   const [cloudEval, setCloudEval] = useState(null);
   const [promo, setPromo] = useState(null); // Bauernumwandlung: { from, to } wartet auf Figurenwahl
   const [addOpen, setAddOpen] = useState(false);
+  const [more, setMore] = useState(false);
+  const narrow = useNarrow();
+  const [tab, setTab] = useState(() => (matchMedia(NARROW).matches ? 'moves' : 'engine')); // moves (nur schmal) | engine | cloud | db | games
   const arrows = settings.varArrows !== false;
   const cg = useRef(null);
   const timer = useRef(null);
   const dirty = useRef(false); // nur speichern, wenn wirklich etwas geändert wurde (wichtig für Kurse: "bearbeitet" oder nicht)
-
-  useEffect(() => {
-    if (focus !== 'coverage') return;
-    const t = setTimeout(() => {
-      const el = document.getElementById('coverage-panel');
-      if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }, 500);
-    return () => clearTimeout(t);
-  }, []);
 
   // Änderungen am Arbeitsstand speichern (leicht verzögert, damit Tippen flüssig bleibt)
   const commit = () => {
@@ -214,7 +221,11 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     commit();
   };
 
-  return html`<div class="editor">
+  const infoTab = !narrow && tab === 'moves' ? 'engine' : tab;
+  const TABS = [['moves', 'Züge'], ['engine', 'Stockfish'], ['cloud', 'Cloud'], ['db', 'Datenbank'], ['games', 'Partien']];
+  const playSan = san => playMove(parseSan(posFromFen(fen), san));
+
+  return html`<div class=${`editor v2 ${free ? 'free' : ''}`}>
     <div class="editor-board">
       <div class="boardrow">
         <${EvalBar} ev=${ev} whiteBelow=${orient === 'white'} />
@@ -226,67 +237,89 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
         <button class="btn small ghost" onClick=${() => setPromo(null)}>Abbrechen</button>
       </div>`}
       <div class="row nav">
-        <button class="btn small" onClick=${() => setPath([])} title="Zum Anfang">⏮</button>
+        <button class="btn small" onClick=${() => setPath([])} title="Zum Anfang (↑)">⏮</button>
         <button class="btn small" onClick=${back} title="Zug zurück (←)">◀</button>
         <button class="btn small" onClick=${forward} title="Zug vor (→)">▶</button>
-        <button class="btn small" onClick=${toEnd} title="Zum Ende">⏭</button>
+        <button class="btn small" onClick=${toEnd} title="Zum Ende (↓)">⏭</button>
         <button class="btn small" onClick=${() => setFlipped(!flipped)} title="Brett drehen (F)">⇅ Drehen</button>
-        <label class="check small"><input type="checkbox" checked=${arrows} onChange=${e => setSettings({ varArrows: e.target.checked })} /> Repertoirezüge als Pfeile</label>
-        <span class="muted small">Züge auf dem Brett ausführen · Pfeile mit Rechtsklick ziehen</span>
+        <label class="check small" title="Zeigt die Züge, die an dieser Stelle schon im Repertoire stehen, als Pfeile"><input type="checkbox" checked=${arrows} onChange=${e => setSettings({ varArrows: e.target.checked })} /> Pfeile</label>
       </div>
     </div>
 
     <div class="editor-side">
-      <div class="card">
+      <div class="card ed-head">
         <div class="row between">
-          <input class="title-input" type="text" value=${w.name} onInput=${e => { w.name = e.target.value || 'Repertoire'; commit(); }} />
-          <button class="btn ghost small" onClick=${onExit}>Fertig</button>
+          <b class="ed-title">${free ? 'Analyse' : w.name}</b>
+          <span class="row">
+            <button class=${`btn small ${more ? 'on' : ''}`} aria-expanded=${more} onClick=${() => setMore(!more)} title="Name, Farbe, Kapitel, PGN-Export">⋯ Mehr</button>
+            <button class="btn primary small" onClick=${onExit}>${free ? 'Schließen' : 'Fertig'}</button>
+          </span>
         </div>
-        <div class="row">
-          <select class="auto" value=${w.color} onChange=${e => { w.color = e.target.value; commit(); }}>
-            <option value="white">Repertoire für Weiß</option>
-            <option value="black">Repertoire für Schwarz</option>
-          </select>
-          <button class="btn small" onClick=${() => downloadPgn(w)}>PGN exportieren</button>
-        </div>
-        <div class="row">
-          <select class="grow" value=${ci} onChange=${e => { setCi(+e.target.value); setPath([]); }}>
-            ${w.chapters.map((c, i) => html`<option value=${i}>${i + 1}. ${c.name}</option>`)}
-          </select>
-          <button class="btn small" onClick=${() => setAddOpen(!addOpen)}>+ Kapitel</button>
-          <button class="btn small ghost" disabled=${w.chapters.length < 2} onClick=${removeChapter} title="Kapitel löschen">🗑</button>
-        </div>
-        ${addOpen && html`<${ChapterForm} count=${w.chapters.length} onAdd=${addChapters} onCancel=${() => setAddOpen(false)} />`}
-        <label>Kapitelname
-          <input type="text" value=${chapter.name} onInput=${e => { chapter.name = e.target.value || 'Kapitel'; commit(); }} />
-        </label>
+        ${(!free || w.chapters.length > 1) && html`<select aria-label="Kapitel" value=${ci} onChange=${e => { setCi(+e.target.value); setPath([]); }}>
+          ${w.chapters.map((c, i) => html`<option value=${i}>${i + 1}. ${c.name}</option>`)}
+        </select>`}
+        ${more && html`<div class="ed-more stack tight">
+          ${!free && html`<div class="grid2">
+            <label>Name des Repertoires
+              <input type="text" value=${w.name} onInput=${e => { w.name = e.target.value || 'Repertoire'; commit(); }} />
+            </label>
+            <label>Farbe
+              <select value=${w.color} onChange=${e => { w.color = e.target.value; commit(); }}>
+                <option value="white">Repertoire für Weiß</option>
+                <option value="black">Repertoire für Schwarz</option>
+              </select>
+            </label>
+          </div>`}
+          <label>Name dieses Kapitels
+            <input type="text" value=${chapter.name} onInput=${e => { chapter.name = e.target.value || 'Kapitel'; commit(); }} />
+          </label>
+          <div class="row">
+            <button class="btn small" onClick=${() => setAddOpen(!addOpen)}>+ Kapitel</button>
+            <button class="btn small danger" disabled=${w.chapters.length < 2} onClick=${removeChapter}>Kapitel löschen</button>
+            <button class="btn small" onClick=${() => downloadPgn(w)}>PGN exportieren</button>
+          </div>
+          ${addOpen && html`<${ChapterForm} count=${w.chapters.length} onAdd=${addChapters} onCancel=${() => setAddOpen(false)} />`}
+          <div class="muted small">Züge gibst du auf dem Brett ein. Ein zweiter Zug in derselben Stellung legt eine Variante an. Pfeile und Markierungen zeichnest du mit der rechten Maustaste.</div>
+        </div>`}
+      </div>
 
+      <div class="ed-tabs tabs" role="tablist">
+        ${TABS.map(([k, t]) => html`<button role="tab" aria-selected=${infoTab === k} class=${`${infoTab === k ? 'on' : ''} ${k === 'moves' ? 'only-narrow' : ''}`} onClick=${() => setTab(k)}>${t}</button>`)}
+      </div>
+
+      <div class=${`card ed-moves ${narrow && infoTab !== 'moves' ? 'off' : ''}`}>
         <${Tree} chapter=${chapter} path=${path.slice(0, trail.length)} select=${setPath} />
-
         ${node
           ? html`<div class="node-tools">
               <div class="row">
                 <b>${moveLabel(trail.length > 1 ? trail[trail.length - 2].fen : chapter.startFen)}${de(node.san)}</b>
                 ${GLYPHS.map(g => html`<button class=${`btn small glyph ${node.glyph === g ? 'on' : ''}`} onClick=${() => setGlyph(g)}>${g}</button>`)}
-              </div>
-              <div class="row">
-                <span class="muted small">Stellung</span>
+                <span class="sep"></span>
                 ${POS.map(([g, t]) => html`<button class=${`btn small glyph ${node.pos === g ? 'on' : ''}`} title=${t} onClick=${() => setPos(g)}>${g}</button>`)}
               </div>
-              <textarea rows="3" placeholder="Kommentar zu diesem Zug …" value=${node.comment || ''} onInput=${e => setComment(e.target.value)}></textarea>
+              <textarea rows=${node.comment ? Math.min(4, Math.max(2, Math.ceil(node.comment.length / 70))) : 1} placeholder="Kommentar zu diesem Zug …" value=${node.comment || ''} onInput=${e => setComment(e.target.value)}></textarea>
               <div class="row">
-                <button class="btn small" disabled=${path[trail.length - 1] === 0} onClick=${promote}>Zur Hauptvariante machen</button>
-                <button class="btn small danger" onClick=${removeNode}>Ab hier löschen</button>
+                <button class="link small" disabled=${path[trail.length - 1] === 0} onClick=${promote}>Zur Hauptvariante machen</button>
+                <button class="link small danger" onClick=${removeNode}>Ab hier löschen</button>
               </div>
             </div>`
-          : html`<p class="muted small">Spiele einen Zug auf dem Brett, um zu beginnen. Ein zweiter Zug in derselben Stellung legt eine Variante an.</p>`}
+          : html`<p class="muted small">Spiele einen Zug auf dem Brett, um zu beginnen.</p>`}
       </div>
 
-      <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlay=${uci => playMove(parseUci(uci))} onBest=${setBest} />
-      <${CloudPanel} fen=${fen} enabled=${settings.cloud} setEnabled=${v => setSettings({ cloud: v })} onEval=${setCloudEval} onPlay=${san => playMove(parseSan(posFromFen(fen), san))} />
-      <${ExplorerPanel} fen=${fen} settings=${settings} setSettings=${setSettings} repId=${w.id} onPlay=${san => playMove(parseSan(posFromFen(fen), san))} />
-      <${ModelGamesPanel} fen=${fen} token=${settings.lichessToken} orientation=${orient} />
-      ${!free && html`<${CoveragePanel} rep=${w} settings=${settings} setSettings=${setSettings} onJump=${(c, p) => { setCi(c); setPath(p); }} />`}
+      <div class=${`card ed-info ${infoTab === 'moves' ? 'off' : ''}`}>
+        <div class="ed-pane" hidden=${infoTab !== 'engine'}>
+          <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlay=${uci => playMove(parseUci(uci))} onBest=${setBest} />
+        </div>
+        <div class="ed-pane" hidden=${infoTab !== 'cloud'}>
+          <${CloudPanel} fen=${fen} enabled=${settings.cloud} setEnabled=${v => setSettings({ cloud: v })} onEval=${setCloudEval} onPlay=${playSan} />
+        </div>
+        <div class="ed-pane" hidden=${infoTab !== 'db'}>
+          <${ExplorerPanel} fen=${fen} settings=${settings} setSettings=${setSettings} returnTo=${free ? { name: 'analyse' } : { name: 'edit', repId: w.id }} onPlay=${playSan} />
+        </div>
+        <div class="ed-pane" hidden=${infoTab !== 'games'}>
+          <${ModelGamesPanel} fen=${fen} token=${settings.lichessToken} orientation=${orient} active=${infoTab === 'games'} />
+        </div>
+      </div>
     </div>
   </div>`;
 }
@@ -345,7 +378,7 @@ function Tree({ chapter, path, select }) {
   };
 
   const items = sequence(chapter.children, [], chapter.startFen, true);
-  return html`<div>
+  return html`<div class="tree-wrap">
     <div class="tree" ref=${ref}>${items.length ? items : html`<span class="muted">Noch keine Züge.</span>`}</div>
     ${hasVar && html`<button class="link small" onClick=${() => setFold({ all: !fold.all, flips: new Set() })}>${fold.all ? 'Alle Varianten ausklappen' : 'Alle Varianten einklappen'}</button>`}
   </div>`;
@@ -478,7 +511,7 @@ function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlay, onBest
 // Hat nichts mit der eigenen Anmeldung zu tun: der Server der Lichess-Eröffnungsdatenbank antwortet nicht
 const LICHESS_DOWN = 'Die Eröffnungsdatenbank von Lichess antwortet gerade nicht. Das liegt am Lichess-Server, nicht an deiner Anmeldung. Bitte später noch einmal versuchen.';
 
-function ExplorerPanel({ fen, settings, setSettings, repId, onPlay }) {
+function ExplorerPanel({ fen, settings, setSettings, returnTo, onPlay }) {
   const [state, setState] = useState({ data: null, error: '', loading: false });
   const token = settings.lichessToken;
   const preset = settings.explorer;
@@ -515,7 +548,7 @@ function ExplorerPanel({ fen, settings, setSettings, repId, onPlay }) {
     </div>
     ${!token
       ? html`<p class="muted small">Lichess gibt seine Partiendatenbank nur für angemeldete Nutzer frei. Die Anmeldung läuft direkt bei Lichess; der Zugtrainer erhält keine Rechte auf deinem Konto.</p>
-          <button class="btn primary" onClick=${() => startLogin({ name: 'edit', repId })}>Mit Lichess anmelden</button>`
+          <button class="btn primary" onClick=${() => startLogin(returnTo)}>Mit Lichess anmelden</button>`
       : html`
         ${state.error && html`<div class="msg bad">${state.error}</div>`}
         ${d && d.opening && html`<div class="muted small">${d.opening.eco} ${d.opening.name}</div>`}
@@ -607,9 +640,17 @@ function CloudPanel({ fen, enabled, setEnabled, onPlay, onEval }) {
 const pct = x => (x >= 0.1 ? Math.round(x * 100) : (x * 100).toFixed(1).replace('.', ',')) + ' %';
 
 /** Abdeckung: häufige Gegnerzüge, die im Repertoire fehlen. */
-function CoveragePanel({ rep, settings, setSettings, onJump }) {
+const coverCache = new Map(); // Repertoire -> letztes Ergebnis (bis zum Neuladen der Seite)
+
+/** Abdeckung prüfen: Welche häufigen Gegnerzüge fehlen im Repertoire? Steht auf der Repertoire-Seite. */
+export function CoveragePanel({ rep, settings, setSettings, onJump }) {
   const [run, setRun] = useState(null); // { checked } während der Prüfung
-  const [res, setRes] = useState(null);
+  const [res, setResState] = useState(() => coverCache.get(rep.id) || null);
+  const setRes = r => {
+    if (r) coverCache.set(rep.id, r);
+    else coverCache.delete(rep.id);
+    setResState(r);
+  };
   const abort = useRef(null);
   useEffect(() => () => abort.current && abort.current.abort(), []);
   const token = settings.lichessToken;
@@ -631,7 +672,7 @@ function CoveragePanel({ rep, settings, setSettings, onJump }) {
     setRun(null);
   };
 
-  const row = g => html`<button class="item" onClick=${() => onJump(g.ci, g.path)} title="Zur Stellung springen">
+  const row = g => html`<button class="item" onClick=${() => onJump(g.ci, g.path)} title="Diese Stelle im Editor öffnen">
     <span class="count">${pct(g.inc)}</span>
     <span class="grow small">
       ${g.type === 'answer'
@@ -645,14 +686,15 @@ function CoveragePanel({ rep, settings, setSettings, onJump }) {
 
   return html`<div class="card" id="coverage-panel">
     <div class="row between">
-      <h3 class="flat">Abdeckung</h3>
+      <h2 class="flat">Abdeckung prüfen</h2>
       <select class="auto" value=${settings.coverMin} onChange=${e => setSettings({ coverMin: +e.target.value })} title="Ab welchem Anteil an allen Partien ein fehlender Zug gemeldet wird">
         ${[0.05, 0.02, 0.01, 0.005].map(v => html`<option value=${v}>ab ${pct(v)} der Partien</option>`)}
       </select>
     </div>
     <p class="muted small">Prüft mit der Eröffnungsdatenbank (${preset.label}), welche häufigen Gegnerzüge im Repertoire fehlen. Die Prozentzahl sagt, in wie vielen deiner Partien der Zug aufs Brett kommt.</p>
     ${!token
-      ? html`<div class="muted small">Dafür ist die Lichess-Anmeldung nötig (siehe Eröffnungsdatenbank oben).</div>`
+      ? html`<div class="muted small">Dafür ist die Lichess-Anmeldung nötig. Lichess gibt seine Partiendatenbank nur für angemeldete Nutzer frei.</div>
+          <div class="row"><button class="btn primary" onClick=${() => startLogin({ name: 'rep', repId: rep.id })}>Mit Lichess anmelden</button></div>`
       : run
         ? html`<div class="row"><span class="muted small">${run.checked} Stellungen geprüft …</span><button class="btn small" onClick=${() => abort.current.abort()}>Abbrechen</button></div>`
         : html`<button class="btn primary" onClick=${start}>${res ? 'Erneut prüfen' : 'Abdeckung prüfen'}</button>`}
@@ -669,8 +711,8 @@ function CoveragePanel({ rep, settings, setSettings, onJump }) {
 const RESULT = { white: '1-0', black: '0-1' };
 
 /** Meisterpartien mit der aktuellen Stellung, zum Durchspielen. */
-function ModelGamesPanel({ fen, token, orientation }) {
-  const [open, setOpen] = useState(false);
+function ModelGamesPanel({ fen, token, orientation, active }) {
+  const open = active;
   const [state, setState] = useState({ fen: null, games: null, error: '' });
   const [view, setView] = useState(null); // { pgn, game }
   const [busy, setBusy] = useState(null);
@@ -702,11 +744,10 @@ function ModelGamesPanel({ fen, token, orientation }) {
   const cur = state.fen === fen ? state : null;
   return html`<div class="card">
     <div class="row between">
-      <h3 class="flat">Musterpartien</h3>
-      <button class="link small" onClick=${() => setOpen(!open)}>${open ? 'ausblenden' : 'anzeigen'}</button>
+      <h3 class="flat">Musterpartien <span class="muted small">Meisterpartien mit dieser Stellung</span></h3>
     </div>
     ${open && (!token
-      ? html`<div class="muted small">Dafür ist die Lichess-Anmeldung nötig (siehe Eröffnungsdatenbank oben).</div>`
+      ? html`<div class="muted small">Dafür ist die Lichess-Anmeldung nötig (siehe Reiter „Datenbank“).</div>`
       : html`
         ${cur && cur.error && html`<div class="msg bad">${cur.error}</div>`}
         ${!cur && html`<span class="muted small">lädt …</span>`}

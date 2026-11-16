@@ -1,4 +1,5 @@
-import { html, useState } from 'preact';
+import { html, useEffect, useState } from 'preact';
+import { fetchStudy, startLogin, studyIdOf } from '../lib/lichess.js';
 import { derived, parseRepertoirePgn } from '../lib/repertoire.js';
 import { dayKey, freshCount, hasPriority, keyScopeOf, keyStats, lastDays, lessonsOf, repStats, scopeOf, streakOf } from '../lib/srs.js';
 import { SAMPLE_COLOR, SAMPLE_NAME, SAMPLE_PGN } from '../lib/sample.js';
@@ -121,7 +122,7 @@ function Home({ db, setGoal, train }) {
 const addSample = addRepertoire => addRepertoire({ name: SAMPLE_NAME, color: SAMPLE_COLOR, chapters: parseRepertoirePgn(SAMPLE_PGN) });
 
 export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin }) {
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(() => !!pendingStudy());
   const reps = color => db.repertoires.filter(r => r.color === color);
   const hasProgress = Object.values(db.progress).some(p => Object.keys(p).length > 0);
   const onboarding = !db.settings.onboarded && !db.sync.last;
@@ -130,7 +131,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
     return html`<div class="stack">
       <${Onboarding} step=${step} rep=${db.repertoires[0]} train=${train} goal=${db.activity.goal} setGoal=${setGoal} finish=${() => setSettings({ onboarded: true })}
         account=${account} openLogin=${openLogin} sample=${() => addSample(addRepertoire)} upload=${() => setUploadOpen(!uploadOpen)} uploadOpen=${uploadOpen} shopUrl=${CONFIG.shopUrl} />
-      ${step === 1 && uploadOpen && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${false} noSample=${true} />`}
+      ${step === 1 && uploadOpen && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${false} noSample=${true} token=${db.settings.lichessToken} />`}
     </div>`;
   }
   const showInstall = (db.settings.lessons || 0) >= 1 && !db.settings.installHint;
@@ -145,7 +146,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
     ${showInstall && html`<${InstallHint} dismiss=${() => setSettings({ installHint: 'dismissed' })} />`}
     ${db.repertoires.length > 0 && html`<${Home} db=${db} setGoal=${setGoal} train=${train} />`}
     <${HomeReco} db=${db} setSettings=${setSettings} go=${go} />
-    <${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${db.repertoires.length > 0} />
+    <${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} hasAny=${db.repertoires.length > 0} token=${db.settings.lichessToken} />
     ${db.repertoires.length === 0 && html`<p class="muted center">Noch kein Repertoire vorhanden. Lade eine PGN-Datei hoch oder probiere das Beispiel aus.</p>`}
     ${db.repertoires.length === 0 && openLogin && !account && html`<div class="card reco-hint">
       <span><b>Kurs gekauft?</b> Melde dich mit deiner Kauf-E-Mail an, dann erscheinen deine Kurse automatisch.</span>
@@ -306,13 +307,95 @@ export function RepertoireView({ db, rep, train, setSettings, attachKeySolutions
   </div>`;
 }
 
-function Upload({ addRepertoire, newRepertoire, hasAny, noSample }) {
+const STUDY_KEY = 'zt-study'; // Adresse der Studie, die nach der Lichess-Anmeldung weiter übernommen werden soll
+const pendingStudy = () => {
+  try {
+    return sessionStorage.getItem(STUDY_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+/** Eine Lichess-Studie einmalig als Repertoire übernehmen: Adresse einfügen, Vorschau, Farbe wählen. */
+function LichessImport({ addRepertoire, token, onDone }) {
+  const [url, setUrl] = useState(pendingStudy);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null); // { text, auth }
+  const [study, setStudy] = useState(null); // { id, name, color, chapters }
+
+  const load = async address => {
+    const id = studyIdOf(address);
+    setStudy(null);
+    if (!id) return setError({ text: 'Das sieht nicht nach der Adresse einer Lichess-Studie aus. Sie beginnt mit https://lichess.org/study/ …' });
+    setBusy(true);
+    setError(null);
+    try {
+      const s = await fetchStudy(id, token);
+      const chapters = parseRepertoirePgn(s.pgn);
+      if (!chapters.length) setError({ text: 'In dieser Studie stehen keine Züge.' });
+      else setStudy({ id, name: s.name || 'Lichess-Studie', color: s.color, chapters });
+    } catch (err) {
+      setError({ text: err.message, auth: !!err.auth });
+    }
+    setBusy(false);
+  };
+
+  // Rückkehr von der Lichess-Anmeldung: gleich weitermachen
+  useEffect(() => {
+    const p = pendingStudy();
+    if (!p) return;
+    sessionStorage.removeItem(STUDY_KEY);
+    if (token) load(p);
+  }, []);
+
+  const login = () => {
+    try {
+      sessionStorage.setItem(STUDY_KEY, url);
+    } catch {
+      // ohne Zwischenspeicher muss die Adresse nach der Anmeldung noch einmal eingefügt werden
+    }
+    startLogin({ name: 'home' }, 'study:read');
+  };
+
+  const take = () => {
+    addRepertoire({ name: study.name, color: study.color, chapters: study.chapters, source: { lichessStudy: study.id } });
+    setStudy(null);
+    setUrl('');
+    onDone();
+  };
+
+  return html`<div class="lichess-import stack tight">
+    <label>Von Lichess übernehmen: Adresse der Studie
+      <input type="text" inputmode="url" value=${url} onInput=${e => setUrl(e.target.value)} placeholder="https://lichess.org/study/AbCd1234"
+        onKeyDown=${e => { if (e.key === 'Enter') { e.preventDefault(); load(url); } }} />
+    </label>
+    <div class="row">
+      <button class="btn primary" type="button" disabled=${busy || !url.trim()} onClick=${() => load(url)}>${busy ? 'Hole Studie …' : 'Studie holen'}</button>
+    </div>
+    ${error && html`<div class="msg bad">
+      ${error.text}
+      ${error.auth && html`<p>Private Studien kann der Trainer nur lesen, wenn du es bei Lichess erlaubst.</p>
+        <div class="row"><button class="btn" type="button" onClick=${login}>${token ? 'Neu bei Lichess anmelden' : 'Mit Lichess anmelden'}</button></div>`}
+    </div>`}
+    ${study && html`<div class="msg ok">
+      <div><b>„${study.name}“</b> · ${study.chapters.length} Kapitel gefunden</div>
+      <div class="row study-color">
+        <span>Ich spiele mit:</span>
+        ${['white', 'black'].map(c => html`<label class="check"><input type="radio" name="study-color" checked=${study.color === c} onChange=${() => setStudy({ ...study, color: c })} /> ${c === 'white' ? 'Weiß' : 'Schwarz'}</label>`)}
+      </div>
+      <div class="row"><button class="btn primary" type="button" onClick=${take}>Übernehmen</button></div>
+      <p class="muted small">Das ist eine einmalige Kopie. Spätere Änderungen bei Lichess kommen nicht automatisch nach.</p>
+    </div>`}
+  </div>`;
+}
+
+function Upload({ addRepertoire, newRepertoire, hasAny, noSample, token }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState('white');
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(!hasAny);
+  const [open, setOpen] = useState(!hasAny || !!pendingStudy());
 
   const submit = async ev => {
     ev.preventDefault();
@@ -350,13 +433,16 @@ function Upload({ addRepertoire, newRepertoire, hasAny, noSample }) {
   if (!open) {
     return html`<div class="row between">
       <h1>Meine Repertoires</h1>
-      <button class="btn primary" onClick=${() => setOpen(true)}>+ Repertoire hochladen</button>
+      <button class="btn primary" onClick=${() => setOpen(true)}>+ Repertoire hinzufügen</button>
     </div>`;
   }
 
-  return html`<form class="card" onSubmit=${submit}>
-    <h2>Repertoire hochladen</h2>
-    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. der Export einer Lichess-Studie oder aus ChessBase. Jede Partie in der Datei wird ein Kapitel, jede Variante eine Linie.</p>
+  return html`<div class="card">
+    <h2>Repertoire hinzufügen</h2>
+    <${LichessImport} addRepertoire=${addRepertoire} token=${token} onDone=${() => setOpen(false)} />
+    <div class="or-line"><span>oder PGN-Datei hochladen</span></div>
+  <form class="stack" onSubmit=${submit}>
+    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. aus ChessBase. Jede Partie in der Datei wird ein Kapitel, jede Variante eine Linie.</p>
     <div class="grid2">
       <label>Name
         <input type="text" value=${name} onInput=${e => setName(e.target.value)} placeholder="z. B. Sizilianisch Najdorf" />
@@ -382,5 +468,6 @@ function Upload({ addRepertoire, newRepertoire, hasAny, noSample }) {
       ${!noSample && html`<button class="btn" type="button" onClick=${sample}>Beispiel-Repertoire laden</button>`}
       ${hasAny && html`<button class="btn ghost" type="button" onClick=${() => setOpen(false)}>Abbrechen</button>`}
     </div>
-  </form>`;
+  </form>
+  </div>`;
 }

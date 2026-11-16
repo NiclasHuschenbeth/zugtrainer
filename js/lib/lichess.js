@@ -4,8 +4,49 @@ const redirectUri = () => location.origin + location.pathname;
 const b64url = buf =>
   btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-/** Leitet zu Lichess weiter. returnTo wird nach der Rückkehr wiederhergestellt. */
-export async function startLogin(returnTo) {
+/** Kennung einer Studie aus ihrer Adresse (https://lichess.org/study/AbCd1234[/Kapitel]) oder der Kennung selbst. -> '' wenn nichts passt */
+export function studyIdOf(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/lichess\.org\/study\/(?:embed\/)?([A-Za-z0-9]{8})(?![A-Za-z0-9])/) || t.match(/^([A-Za-z0-9]{8})$/);
+  return m ? m[1] : '';
+}
+
+/**
+ * Holt eine Studie als PGN. Öffentliche Studien gehen ohne Anmeldung; private und nicht gelistete brauchen
+ * ein Token mit der Erlaubnis study:read. -> { pgn, name, color }
+ * Fehler mit .auth = true: Anmeldung (mit dieser Erlaubnis) nötig.
+ */
+export async function fetchStudy(id, token) {
+  const url = `https://lichess.org/api/study/${id}.pgn?orientation=true&clocks=false`;
+  const get = async auth => {
+    try {
+      return await fetch(url, auth ? { headers: { Authorization: `Bearer ${token}` } } : {});
+    } catch {
+      throw new Error('Lichess ist gerade nicht erreichbar. Bist du online?');
+    }
+  };
+  let res = await get(false);
+  if (!res.ok && token && res.status !== 429) res = await get(true);
+  if (res.status === 429) throw new Error('Zu viele Anfragen an Lichess – bitte eine Minute warten.');
+  if (!res.ok) {
+    throw Object.assign(
+      new Error(
+        token
+          ? 'Lichess gibt diese Studie nicht heraus. Entweder fehlt die Erlaubnis für private Studien (dann bitte neu bei Lichess anmelden), die Adresse stimmt nicht, oder der Besitzer hat das Teilen ausgeschaltet.'
+          : 'Diese Studie ist privat oder nicht gelistet – oder die Adresse stimmt nicht.',
+      ),
+      { auth: true },
+    );
+  }
+  const pgn = await res.text();
+  const name = (pgn.match(/\[StudyName "((?:[^"\\]|\\.)*)"\]/) || [])[1] || '';
+  const black = (pgn.match(/\[Orientation "black"\]/g) || []).length;
+  const white = (pgn.match(/\[Orientation "white"\]/g) || []).length;
+  return { pgn, name: name.replace(/\\(.)/g, '$1'), color: black > white ? 'black' : 'white' };
+}
+
+/** Leitet zu Lichess weiter. returnTo wird nach der Rückkehr wiederhergestellt. scope: z. B. 'study:read' für private Studien. */
+export async function startLogin(returnTo, scope = '') {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
   const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
@@ -18,6 +59,7 @@ export async function startLogin(returnTo) {
     code_challenge: challenge,
     state,
   });
+  if (scope) q.set('scope', scope);
   location.href = `https://lichess.org/oauth?${q}`;
 }
 

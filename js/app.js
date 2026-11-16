@@ -333,10 +333,11 @@ function App() {
     setView({ name: 'train', repId, mode, chapter, focusKey, visits, nonce: Date.now(), backTo: backTo === undefined ? here : backTo });
   };
 
-  const addRepertoire = ({ name, color, chapters, keySolutions }) => {
+  // source: Herkunft, z. B. { lichessStudy: '<Kennung>' } (für ein späteres "Neu von Lichess holen")
+  const addRepertoire = ({ name, color, chapters, keySolutions, source }) => {
     const id = crypto.randomUUID();
     update(cur => ({
-      repertoires: [...cur.repertoires, { id, name, color, chapters, ...(keySolutions ? { keySolutions } : {}), createdAt: Date.now(), updatedAt: Date.now() }],
+      repertoires: [...cur.repertoires, { id, name, color, chapters, ...(keySolutions ? { keySolutions } : {}), ...(source ? { source } : {}), createdAt: Date.now(), updatedAt: Date.now() }],
     }));
     return id;
   };

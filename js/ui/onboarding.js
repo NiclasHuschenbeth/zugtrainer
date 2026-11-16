@@ -35,8 +35,8 @@ export function Onboarding({ step, rep, train, goal, setGoal, finish, account, o
           <span>Lädt ein kleines Beispiel-Repertoire mit 1.e4, ohne Anmeldung.</span>
         </button>
         <button class=${`start-opt ${uploadOpen ? 'on' : ''}`} aria-expanded=${uploadOpen} onClick=${upload}>
-          <b>Eigene PGN-Datei hochladen</b>
-          <span>Zum Beispiel der Export einer Lichess-Studie oder aus ChessBase.</span>
+          <b>Eigenes Repertoire mitbringen</b>
+          <span>Eine Lichess-Studie übernehmen oder eine PGN-Datei hochladen.</span>
         </button>
       </div>
       ${shopUrl && html`<p class="small"><a href=${shopUrl} target="_blank" rel="noopener">Kurse von Modern Chess ansehen ↗</a></p>`}

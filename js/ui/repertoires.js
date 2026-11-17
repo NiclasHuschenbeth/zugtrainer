@@ -339,6 +339,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           <b class="depth-val">${rangeLabel(from, depth)}</b>
         </div>
         <${RangeSlider} from=${from} to=${depth} onChange=${(f, t) => setSettings({ from: f, depth: t })} />
+        <div class="muted small">Tipp: Lerne erst die ersten Züge, zum Beispiel 1 bis 10, und erweitere den Bereich später. Frühere Züge werden vorgespielt. Über ⚙ beim Kapitel lässt sich der Bereich auch einzeln einstellen.</div>
         ${hasAlts && html`<label class="check alts" title="Aus: Es wird nur die Hauptvariante abgefragt (jeweils der erste Zug im PGN). Alternativen bleiben im Repertoire.">
           <input type="checkbox" checked=${!!db.settings.alts} onChange=${ev => setSettings({ alts: ev.target.checked })} /> Auch Alternativzüge trainieren
         </label>`}

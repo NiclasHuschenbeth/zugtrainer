@@ -1,18 +1,38 @@
-// Stockfish 19 (Lite, ein Thread) als Web Worker. Spricht UCI.
-const WORKER_URL = new URL('../../vendor/stockfish/stockfish-19-lite-single.js', import.meta.url);
+// Stockfish 19 (Lite) als Web Worker. Spricht UCI.
+// Mehrere Kerne gehen nur, wenn die Seite "cross-origin isolated" ist (besondere Kopfzeilen in _headers);
+// sonst läuft die Ein-Kern-Fassung wie bisher.
+const SINGLE_URL = new URL('../../vendor/stockfish/stockfish-19-lite-single.js', import.meta.url);
+const MULTI_URL = new URL('../../vendor/stockfish/stockfish-19-lite.js', import.meta.url);
+
+/** Obergrenze für Kerne. Der Browser gibt Stockfish höchstens 2 GB Speicher; mehr Kerne bringen jeweils etwas weniger. */
+export const MAX_THREADS = 32;
+
+const phone = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** Wie viele Kerne Stockfish hier nutzen darf (1 = Ein-Kern-Fassung). */
+export function engineThreads() {
+  if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') return 1;
+  const cores = navigator.hardwareConcurrency || 2;
+  // einen Kern für die Seite selbst freilassen
+  return Math.max(1, Math.min(MAX_THREADS, cores - 1));
+}
 
 export class StockfishEngine {
   /** onUpdate({ fen, depth, lines: [{ cp?, mate?, pv: [uci] }] }) – Bewertung aus Sicht von Weiß */
-  constructor(onUpdate, { multiPv = 3, depth = 24 } = {}) {
+  constructor(onUpdate, { multiPv = 3, depth, threads = engineThreads(), hash } = {}) {
     this.onUpdate = onUpdate;
-    this.depth = depth;
+    // Handy: etwas weniger tief und weniger Speicher, damit der Akku hält
+    this.depth = depth || (phone() ? 26 : 30);
+    this.threads = threads;
     this.searching = false;
     this.pending = null;
     this.fen = null;
     this.lines = [];
-    this.worker = new Worker(WORKER_URL);
+    this.worker = new Worker(threads > 1 ? MULTI_URL : SINGLE_URL);
     this.worker.onmessage = e => this.receive(typeof e.data === 'string' ? e.data : '');
     this.send('uci');
+    if (threads > 1) this.send(`setoption name Threads value ${threads}`);
+    this.send(`setoption name Hash value ${hash || (phone() ? 32 : threads > 8 ? 256 : 64)}`);
     this.send(`setoption name MultiPV value ${multiPv}`);
   }
 

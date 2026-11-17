@@ -11,3 +11,20 @@
 # Der Service Worker muss immer frisch geladen werden
 /sw.js
   Cache-Control: no-cache
+
+# Testseite für mehrere Stockfish-Kerne (F20). Nur diese Seiten bekommen die besonderen Kopfzeilen.
+/kerntest/locker/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
+/kerntest/streng/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/kerntest/*
+  X-Robots-Tag: noindex
+
+# Stockfish läuft als eigener Hintergrundprozess; der braucht dieselben Kopfzeilen wie die Seite (schadet sonst nicht)
+/vendor/stockfish/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin

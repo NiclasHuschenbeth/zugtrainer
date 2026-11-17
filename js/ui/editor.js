@@ -531,7 +531,7 @@ function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlayLine, on
 
   return html`<div class="card">
     <div class="row between">
-      <h3 class="flat">Stockfish 19 ${fresh && html`<span class="muted small">Tiefe ${fresh.depth}</span>`}</h3>
+      <h3 class="flat">Stockfish 19 ${fresh && html`<span class="muted small" title=${eng.current && eng.current.threads > 1 ? 'Stockfish rechnet auf mehreren Prozessorkernen gleichzeitig' : 'Dieser Browser erlaubt Stockfish hier nur einen Prozessorkern'}>Tiefe ${fresh.depth} · ${eng.current && eng.current.threads > 1 ? `${eng.current.threads} Kerne` : '1 Kern'}</span>`}</h3>
       <span class="row">
         ${enabled && html`<label class="inline small" title="Wie viele Varianten Stockfish gleichzeitig zeigt">Varianten
           <select class="auto" value=${lines} onChange=${e => setLines(+e.target.value)}>${[1, 2, 3, 4, 5].map(n => html`<option value=${n}>${n}</option>`)}</select>

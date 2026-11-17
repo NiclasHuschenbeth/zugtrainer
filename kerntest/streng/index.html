@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kerntest</title>
+<link rel="stylesheet" href="../kerntest.css">
+</head>
+<body>
+<h1>Kerntest (streng)</h1>
+<p>Prüft, ob Stockfish hier mehrere Prozessorkerne nutzen darf und ob Bot-Schutz und fremde Dienste trotzdem funktionieren. Diese Variante ist nötig für iPhone und Safari.</p>
+<p><button id="go">Test starten</button> <button id="copy" hidden>Ergebnis kopieren</button></p>
+<div id="captcha"></div>
+<ul id="list"></ul>
+<pre id="raw"></pre>
+<p><a href="../locker/">Zur lockeren Variante</a></p>
+<script type="module" src="../kerntest.js"></script>
+</body>
+</html>

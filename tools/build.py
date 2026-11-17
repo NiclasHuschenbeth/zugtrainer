@@ -17,6 +17,9 @@ for base, dirs, names in os.walk(root):
         # Kurs-Cover: nur für die Empfehlung, erst bei Gebrauch laden
         if rel.startswith(('vendor/ort/', 'vendor/maia/', 'icons/courses/')):
             continue
+        # Testseite (F20) und Mehrkern-Stockfish: nicht vorab laden (Mehrkern nur, wo der Browser es erlaubt)
+        if rel.startswith('kerntest/') or rel.startswith('vendor/stockfish/stockfish-19-lite.'):
+            continue
         files.append(rel)
 files.sort()
 h = hashlib.sha1()

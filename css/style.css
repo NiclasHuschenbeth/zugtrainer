@@ -568,7 +568,20 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .editor.v2 .off { display: none; }
 .link.danger { color: var(--bad); }
 .link:disabled { color: var(--muted); cursor: default; text-decoration: none; }
-.pv span { white-space: nowrap; }
+/* Stockfish-Varianten: einzeilig mit Aufklappen, jeder Zug anklickbar, Vorschau-Brett */
+div.pv { cursor: default; align-items: baseline; }
+div.pv:hover { background: none; }
+.pv .pv-moves { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv.open .pv-moves { white-space: normal; overflow: visible; line-height: 1.7; }
+.pv .pvm { cursor: pointer; border-radius: 4px; padding: 0 .12rem; overflow: visible; }
+.pv .pvm:hover { background: var(--primary); color: #fff; }
+.pv-more { flex: none; background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; padding: 0 .3rem; }
+.pv-more:hover { color: var(--primary); }
+.pv-help { margin-top: .3rem; }
+.pv-peek { position: fixed; z-index: 60; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgba(47, 54, 75, .3); display: flex; flex-direction: column; gap: 6px; }
+.pv-peek.tap { pointer-events: auto; }
+.pv-peek .board-frame { padding: 0; box-shadow: none; border-radius: 4px; }
+.pv-peek .coord-ranks, .pv-peek .coord-files { display: none; }
 @media (max-width: 820px) {
   .editor.v2 { height: auto; display: block; }
   /* Das Brett bleibt beim Scrollen oben stehen: man kann immer ziehen */

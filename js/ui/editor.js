@@ -123,6 +123,32 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     setPath([...path.slice(0, trail.length), idx]);
   };
 
+  /** Mehrere Züge hintereinander (Variante der Engine) ab der aktuellen Stellung in die Notation übernehmen. */
+  const playLine = ucis => {
+    const pos = posFromFen(fen);
+    const p = path.slice(0, trail.length);
+    let list = kids;
+    let changed = false;
+    for (const uci of ucis) {
+      const move = parseUci(uci);
+      if (!move || !pos.isLegal(move)) break;
+      const [from, to] = moveKeys(pos, move);
+      const san = makeSanAndPlay(pos, move);
+      let idx = list.findIndex(k => k.san === san);
+      if (idx < 0) {
+        const n = { san, from, to, fen: makeFen(pos.toSetup()), children: [] };
+        if (move.promotion) n.promotion = move.promotion;
+        list.push(n);
+        idx = list.length - 1;
+        changed = true;
+      }
+      p.push(idx);
+      list = list[idx].children;
+    }
+    if (changed) commit();
+    setPath(p);
+  };
+
   const onBoardMove = (orig, dest) => {
     const pos = posFromFen(fen);
     const move = { from: parseSquare(orig), to: parseSquare(dest) };
@@ -308,7 +334,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
 
       <div class=${`card ed-info ${infoTab === 'moves' ? 'off' : ''}`}>
         <div class="ed-pane" hidden=${infoTab !== 'engine'}>
-          <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlay=${uci => playMove(parseUci(uci))} onBest=${setBest} />
+          <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlayLine=${playLine} onBest=${setBest} orientation=${orient} />
         </div>
         <div class="ed-pane" hidden=${infoTab !== 'cloud'}>
           <${CloudPanel} fen=${fen} enabled=${settings.cloud} setEnabled=${v => setSettings({ cloud: v })} onEval=${setCloudEval} onPlay=${playSan} />
@@ -436,21 +462,38 @@ function ChapterForm({ count, onAdd, onCancel }) {
   </div>`;
 }
 
-function pvToSan(fen, pv, max = 8) {
+/** Variante der Engine als Liste: Text ("4.Sxe5" bzw. "d5"), Stellung nach dem Zug, Felder für die Markierung. */
+function pvPlies(fen, pv) {
   const pos = posFromFen(fen);
   const out = [];
-  for (const uci of pv.slice(0, max)) {
+  for (const uci of pv) {
     const move = parseUci(uci);
     if (!move || !pos.isLegal(move)) break;
     const label = moveLabel(makeFen(pos.toSetup()));
+    const last = moveKeys(pos, move);
     const san = makeSanAndPlay(pos, move);
-    out.push(whiteLabel(label) || !out.length ? `${label}${san}` : san);
+    out.push({ text: de(whiteLabel(label) || !out.length ? `${label}${san}` : san), fen: makeFen(pos.toSetup()), last });
   }
-  return out.join(' ');
+  return out;
 }
 
-function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlay, onBest }) {
+const NO_HOVER = '(hover: none)';
+
+/** Lage des Vorschau-Bretts: über dem Zug, wenn dort Platz ist, sonst darunter; nie aus dem Fenster heraus. */
+function peekStyle(p) {
+  const size = 236;
+  const h = size + (p.take ? 60 : 0);
+  const left = Math.max(8, Math.min(innerWidth - size - 8, p.x - size / 2));
+  const top = p.y - h - 8 >= 8 ? p.y - h - 8 : Math.min(innerHeight - h - 8, p.bottom + 8);
+  return { left: `${left}px`, top: `${Math.max(8, top)}px`, width: `${size}px` };
+}
+
+function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlayLine, onBest, orientation }) {
   const [info, setInfo] = useState(null);
+  const [wide, setWide] = useState(-1); // aufgeklappte Variante
+  const [peek, setPeek] = useState(null); // Vorschau: { fen, last, x, y, take?: [uci] }
+  const touch = matchMedia(NO_HOVER).matches;
+  useEffect(() => setPeek(null), [fen]);
   const [error, setError] = useState('');
   const eng = useRef(null);
 
@@ -499,11 +542,32 @@ function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlay, onBest
     ${error && html`<div class="msg bad">${error}</div>`}
     ${enabled && !error && html`<div class="pvs">
       ${fresh
-        ? fresh.lines.map(l => html`<button class="pv" onClick=${() => onPlay(l.pv[0])} title="Ersten Zug übernehmen">
-            <b class=${(l.mate != null ? l.mate : l.cp) >= 0 ? 'ev w' : 'ev b'}>${formatScore(l)}</b>
-            <span>${de(pvToSan(fen, l.pv))}</span>
-          </button>`)
+        ? fresh.lines.map((l, li) => {
+            const plies = pvPlies(fen, l.pv);
+            // Maus: Vorschau beim Überfahren, Klick übernimmt bis zu diesem Zug. Finger: Antippen zeigt Vorschau mit Knopf.
+            const show = (ev, p, i, take) => {
+              const r = ev.currentTarget.getBoundingClientRect();
+              setPeek({ fen: p.fen, last: p.last, x: r.left + r.width / 2, y: r.top, bottom: r.bottom, take: take ? l.pv.slice(0, i + 1) : null });
+            };
+            return html`<div class=${`pv ${wide === li ? 'open' : ''}`} key=${li}>
+              <b class=${(l.mate != null ? l.mate : l.cp) >= 0 ? 'ev w' : 'ev b'}>${formatScore(l)}</b>
+              <span class="pv-moves">
+                ${plies.map((p, i) => html`<span class="pvm" title=${touch ? '' : 'Variante bis zu diesem Zug übernehmen'}
+                  onMouseEnter=${touch ? null : ev => show(ev, p, i, false)} onMouseLeave=${touch ? null : () => setPeek(null)}
+                  onClick=${ev => (touch ? show(ev, p, i, true) : (setPeek(null), onPlayLine(l.pv.slice(0, i + 1))))}>${p.text}</span>${' '}`)}
+              </span>
+              <button class="pv-more" onClick=${() => setWide(wide === li ? -1 : li)} title=${wide === li ? 'Variante einklappen' : 'Ganze Variante zeigen'} aria-expanded=${wide === li}>${wide === li ? '▴' : '▾'}</button>
+            </div>`;
+          })
         : html`<span class="muted small">rechnet …</span>`}
+      ${fresh && html`<div class="muted small pv-help">${touch ? 'Zug antippen: Vorschau der Stellung, dann übernehmen.' : 'Maus über einen Zug: Vorschau. Klick: Variante bis dorthin übernehmen.'}</div>`}
+    </div>`}
+    ${peek && html`<div class=${`pv-peek ${peek.take ? 'tap' : ''}`} style=${peekStyle(peek)}>
+      <${Board} key=${peek.fen} orientation=${orientation} fen=${peek.fen} lastMove=${peek.last} />
+      ${peek.take && html`<div class="row">
+        <button class="btn primary small" onClick=${() => { const t = peek.take; setPeek(null); onPlayLine(t); }}>Bis hier übernehmen</button>
+        <button class="btn ghost small" onClick=${() => setPeek(null)}>Schließen</button>
+      </div>`}
     </div>`}
   </div>`;
 }

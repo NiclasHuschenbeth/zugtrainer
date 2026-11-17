@@ -583,6 +583,7 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .course-choice .cc-list { display: flex; flex-direction: column; gap: .35rem; max-height: 55vh; overflow: auto; padding: .2rem 0; }
 .course-choice .cc-base { font-weight: 600; margin-top: .3rem; }
 .course-choice .cc-item.sub { padding-left: 1.4rem; }
+.course-choice .cc-item.single { font-weight: 600; margin-top: .3rem; }
 .course-choice .cc-item { min-height: 36px; align-items: center; }
 .opp-choice { display: flex; flex-direction: column; gap: .3rem; margin: .2rem 0 .3rem; }
 .opp-choice .check { align-items: flex-start; }

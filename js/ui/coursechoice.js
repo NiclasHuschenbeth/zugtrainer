@@ -50,7 +50,7 @@ export function CourseChoice({ courses, chosen, first, onApply, onClose }) {
       <div class="cc-list">
         ${groups.map(g =>
           g.items.length === 1 && !g.items[0].level
-            ? html`<label class="check cc-item"><input type="checkbox" checked=${sel.has(String(g.items[0].id))} onChange=${e => flip(String(g.items[0].id), e.target.checked)} /> ${g.base}</label>`
+            ? html`<label class="check cc-item single"><input type="checkbox" checked=${sel.has(String(g.items[0].id))} onChange=${e => flip(String(g.items[0].id), e.target.checked)} /> ${g.base}</label>`
             : html`<div class="cc-group">
                 <div class="cc-base">${g.base}</div>
                 ${g.items.map(c => html`<label class="check cc-item sub"><input type="checkbox" checked=${sel.has(String(c.id))} onChange=${e => flip(String(c.id), e.target.checked)} /> ${c.level || c.name}</label>`)}

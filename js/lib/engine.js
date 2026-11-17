@@ -1,6 +1,6 @@
 // Stockfish 19 (Lite) als Web Worker. Spricht UCI.
-// Mehrere Kerne gehen nur, wenn die Seite "cross-origin isolated" ist (besondere Kopfzeilen in _headers);
-// sonst läuft die Ein-Kern-Fassung wie bisher.
+// Mehrere Kerne gehen nur, wenn die Seite "cross-origin isolated" ist (Cross-Origin-Kopfzeilen in _headers);
+// sonst (ältere Browser) läuft die Ein-Kern-Fassung.
 const SINGLE_URL = new URL('../../vendor/stockfish/stockfish-19-lite-single.js', import.meta.url);
 const MULTI_URL = new URL('../../vendor/stockfish/stockfish-19-lite.js', import.meta.url);
 
@@ -9,9 +9,12 @@ export const MAX_THREADS = 32;
 
 const phone = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
-/** Wie viele Kerne Stockfish hier nutzen darf (1 = Ein-Kern-Fassung). */
+/** Darf die Mehrkern-Fassung hier laufen? */
+const canMulti = () => !!globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+
+/** Wie viele Kerne Stockfish hier nutzen darf. */
 export function engineThreads() {
-  if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') return 1;
+  if (!canMulti()) return 1;
   const cores = navigator.hardwareConcurrency || 2;
   // einen Kern für die Seite selbst freilassen
   return Math.max(1, Math.min(MAX_THREADS, cores - 1));
@@ -28,10 +31,11 @@ export class StockfishEngine {
     this.pending = null;
     this.fen = null;
     this.lines = [];
-    this.worker = new Worker(threads > 1 ? MULTI_URL : SINGLE_URL);
+    // Ist die Seite isoliert, immer die Mehrkern-Fassung (auch mit 1 Kern); die Ein-Kern-Fassung bleibt für ältere Browser.
+    this.worker = new Worker(canMulti() ? MULTI_URL : SINGLE_URL);
     this.worker.onmessage = e => this.receive(typeof e.data === 'string' ? e.data : '');
     this.send('uci');
-    if (threads > 1) this.send(`setoption name Threads value ${threads}`);
+    if (canMulti()) this.send(`setoption name Threads value ${threads}`);
     this.send(`setoption name Hash value ${hash || (phone() ? 32 : threads > 8 ? 256 : 64)}`);
     this.send(`setoption name MultiPV value ${multiPv}`);
   }

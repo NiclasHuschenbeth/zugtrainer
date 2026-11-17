@@ -1,8 +1,12 @@
 # Einstellungen für Cloudflare Pages / Netlify
 
+# Die beiden Cross-Origin-Zeilen erlauben Stockfish mehrere Prozessorkerne (F20).
+# Folge: Bilder/Skripte von fremden Seiten gehen nur, wenn diese es erlauben (Turnstile, Supabase, Lichess, ChessDB getestet).
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
 
 # Bibliotheken ändern sich nur mit neuer Version
 /vendor/*
@@ -11,20 +15,3 @@
 # Der Service Worker muss immer frisch geladen werden
 /sw.js
   Cache-Control: no-cache
-
-# Testseite für mehrere Stockfish-Kerne (F20). Nur diese Seiten bekommen die besonderen Kopfzeilen.
-/kerntest/locker/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless
-
-/kerntest/streng/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-
-/kerntest/*
-  X-Robots-Tag: noindex
-
-# Stockfish läuft als eigener Hintergrundprozess; der braucht dieselben Kopfzeilen wie die Seite (schadet sonst nicht)
-/vendor/stockfish/*
-  Cross-Origin-Embedder-Policy: require-corp
-  Cross-Origin-Resource-Policy: same-origin

@@ -1,8 +1,0 @@
-body { font: 16px/1.5 system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 16px; background: #fff; color: #222; }
-button { font: inherit; padding: 10px 16px; min-height: 44px; }
-#list { padding-left: 1.2em; }
-#list li.ok::marker { content: '✓  '; color: #2a7a2a; }
-#list li.bad { color: #b00020; }
-#list li.bad::marker { content: '✗  '; }
-#raw { white-space: pre-wrap; font-size: 12px; color: #666; }
-#captcha { margin: 8px 0; }

@@ -1,6 +1,6 @@
 // Service Worker: macht den Zugtrainer offline nutzbar.
 // VERSION und FILES werden vor dem Hochladen automatisch gesetzt (siehe README, "Vor dem Hochladen").
-const VERSION = '3f30d425c1';
+const VERSION = '0429e8b2f1';
 const FILES = [
   "./",
   ".gitignore",
@@ -74,6 +74,8 @@ const FILES = [
   "vendor/preact/standalone.module.js",
   "vendor/stockfish/stockfish-19-lite-single.js",
   "vendor/stockfish/stockfish-19-lite-single.wasm",
+  "vendor/stockfish/stockfish-19-lite.js",
+  "vendor/stockfish/stockfish-19-lite.wasm",
   "vendor/supabase/supabase.js"
 ];
 const CACHE = `zugtrainer-${VERSION}`;

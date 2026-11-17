@@ -575,6 +575,17 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .ref-row .btn { flex: none; min-width: 4.2rem; }
 .ref-comment { margin-top: .15rem; }
 .ref-choose summary { cursor: pointer; }
+.list-tools { margin-bottom: -.4rem; }
+.rep-row.edit-row { display: flex; align-items: center; gap: .6rem; cursor: pointer; min-height: 44px; }
+.rep-row.edit-row input { width: 1.2rem; height: 1.2rem; }
+.more-courses summary { cursor: pointer; }
+.more-courses .mc-row { gap: .6rem; padding: .25rem 0; border-top: 1px solid var(--line); }
+.course-choice .cc-list { display: flex; flex-direction: column; gap: .35rem; max-height: 55vh; overflow: auto; padding: .2rem 0; }
+.course-choice .cc-base { font-weight: 600; margin-top: .3rem; }
+.course-choice .cc-item.sub { padding-left: 1.4rem; }
+.course-choice .cc-item { min-height: 36px; align-items: center; }
+.opp-choice { display: flex; flex-direction: column; gap: .3rem; margin: .2rem 0 .3rem; }
+.opp-choice .check { align-items: flex-start; }
 .ov-table th { font-size: .78rem; font-weight: 600; color: var(--muted); text-align: left; padding-bottom: .2rem; }
 .ov-table th.right { text-align: right; }
 .ov-table .ov-rep { max-width: 11rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

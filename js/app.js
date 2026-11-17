@@ -5,6 +5,7 @@ import { dayKey, gradeCard, keyStats } from './lib/srs.js';
 import { positionVisits } from './lib/analysis.js';
 import { finishLogin } from './lib/lichess.js';
 import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
+import { CourseChoice, defaultPick } from './ui/coursechoice.js';
 import { Trainer } from './ui/trainer.js';
 import { KeyTrainer } from './ui/keypos.js';
 import { GamesView } from './ui/games.js';
@@ -66,6 +67,9 @@ function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
   const [loginNote, setLoginNote] = useState(null); // Rückmeldung nach der Anmeldung: loading | found | none | error
+  const [entitled, setEntitled] = useState([]); // freigeschaltete Kurse [{ id, name, color, version }] (vom letzten Abgleich)
+  const [choice, setChoice] = useState(null); // Kursauswahl offen: { first: bool }
+  const [courseBusyAdd, setCourseBusyAdd] = useState(null);
   const firstLogin = useRef(false);
   const scratch = useRef({ id: 'analyse', name: 'Analyse', color: 'white', chapters: [{ name: 'Analyse', startFen: INITIAL_FEN, children: [] }] });
   const [courseNote, setCourseNote] = useState(null); // Namen gerade aktualisierter Kurse
@@ -109,8 +113,35 @@ function App() {
       // Erst nur die Versionsnummern holen; den Kursinhalt (mehrere MB) nur für neue oder geänderte Kurse.
       // Deshalb gilt: jede Änderung an einem Kurs in der Datenbank braucht version + 1.
       const list = await fetchCourseVersions();
-      const cur = dbRef.current;
-      const removed = cur.settings.coursesRemoved || {};
+      setEntitled(list);
+      let cur = dbRef.current;
+      const removed = { ...(cur.settings.coursesRemoved || {}) };
+      const chosenBefore = !!cur.settings.coursesChosen;
+      if (!chosenBefore) {
+        // Noch keine Auswahl getroffen: nichts Neues laden, erst fragen (vorhandene Kurse bleiben bis dahin)
+        for (const r of list) if (!cur.repertoires.some(x => x.id === 'course-' + r.id)) removed[r.id] = true;
+        if (list.length) setChoice(c => c || { first: true });
+      } else {
+        // Neu gekaufte Kurse (noch nie in der Auswahl gesehen) automatisch laden
+        const known = cur.settings.coursesKnown || {};
+        const fresh = list.filter(r => !known[r.id]);
+        if (fresh.length) {
+          const coursesKnown = { ...known };
+          for (const r of fresh) {
+            coursesKnown[r.id] = true;
+            delete removed[r.id];
+          }
+          update(c => {
+            const cr = { ...(c.settings.coursesRemoved || {}) };
+            for (const r of fresh) delete cr[r.id];
+            return { settings: { ...c.settings, coursesKnown, coursesRemoved: cr, updatedAt: Date.now() } };
+          });
+          cur = dbRef.current;
+        }
+      }
+      // Auf einem anderen Gerät ausgeblendete Kurse auch hier aus der Liste nehmen (Lernstand bleibt)
+      const hidden = cur.repertoires.filter(r => isCourseId(r.id) && !r.locked && removed[r.id.slice('course-'.length)]).map(r => r.id);
+      if (chosenBefore && hidden.length) update(c => ({ repertoires: c.repertoires.filter(r => !hidden.includes(r.id)) }));
       const oldSeen = cur.settings.coursesSeen || {}; // frühere Fassung: Versionsstand stand in den Einstellungen
       const localVersion = (r, courseId) => r.courseVersion || (typeof oldSeen[courseId] === 'number' ? oldSeen[courseId] : 1);
       const mineOf = courseId => cur.repertoires.find(r => r.id === 'course-' + courseId);
@@ -234,6 +265,8 @@ function App() {
     if (!firstLogin.current) return;
     if (!found) return setLoginNote({ kind: 'error' });
     firstLogin.current = false;
+    // Kursauswahl offen: die ersetzt die Meldung
+    if (found.count && !dbRef.current.settings.coursesChosen) return setLoginNote(null);
     const names = dbRef.current.repertoires.filter(r => isCourseId(r.id) && !r.locked).map(r => r.name);
     if (!found.count) setLoginNote({ kind: 'none', email: acc.email });
     else setLoginNote(names.length ? { kind: 'found', names } : null);
@@ -428,19 +461,54 @@ function App() {
 
   const removeRepertoire = id =>
     update(cur => {
-      const progress = { ...cur.progress };
-      delete progress[id];
-      // Gelöschter Kurs: merken, damit er auf keinem Gerät wieder angelegt wird (wird mit den Einstellungen abgeglichen)
+      // Kurs: nur ausblenden. Lernstand bleibt, der Kurs steht dann unter „Weitere freigeschaltete Kurse“ (auf allen Geräten)
       if (isCourseId(id) && !(cur.repertoires.find(r => r.id === id) || {}).locked) {
         const coursesRemoved = { ...(cur.settings.coursesRemoved || {}), [id.slice('course-'.length)]: true };
-        return { repertoires: cur.repertoires.filter(r => r.id !== id), progress, settings: { ...cur.settings, coursesRemoved, updatedAt: Date.now() } };
+        return { repertoires: cur.repertoires.filter(r => r.id !== id), settings: { ...cur.settings, coursesRemoved, coursesChosen: true, updatedAt: Date.now() } };
       }
+      const progress = { ...cur.progress };
+      delete progress[id];
       return {
         repertoires: cur.repertoires.filter(r => r.id !== id),
         progress,
         sync: { ...cur.sync, tombstones: { ...cur.sync.tombstones, [id]: Date.now() } },
       };
     });
+
+  /** Auswahl übernehmen: gewählte Kurse laden, die anderen ausblenden (Lernstand bleibt). */
+  const applyChoice = sel => {
+    const ids = entitled.map(r => String(r.id));
+    update(c => {
+      const coursesRemoved = { ...(c.settings.coursesRemoved || {}) };
+      const coursesKnown = { ...(c.settings.coursesKnown || {}) };
+      for (const id of ids) {
+        coursesKnown[id] = true;
+        if (sel.has(id)) delete coursesRemoved[id];
+        else coursesRemoved[id] = true;
+      }
+      const drop = new Set(ids.filter(id => !sel.has(id)).map(id => 'course-' + id));
+      return {
+        repertoires: c.repertoires.filter(r => !drop.has(r.id) || r.locked),
+        settings: { ...c.settings, coursesRemoved, coursesKnown, coursesChosen: true, updatedAt: Date.now() },
+      };
+    });
+    setChoice(null);
+    setTimeout(() => preloadCourses().then(() => scheduleSync(500)), 0);
+  };
+
+  /** Einen ausgeblendeten Kurs wieder in den Trainer holen. */
+  const addCourse = async id => {
+    setCourseBusyAdd(id);
+    update(c => {
+      const coursesRemoved = { ...(c.settings.coursesRemoved || {}) };
+      delete coursesRemoved[id];
+      return { settings: { ...c.settings, coursesRemoved, coursesChosen: true, coursesKnown: { ...(c.settings.coursesKnown || {}), [id]: true }, updatedAt: Date.now() } };
+    });
+    await new Promise(r => setTimeout(r, 0));
+    await preloadCourses();
+    setCourseBusyAdd(null);
+    scheduleSync(500);
+  };
 
   const grade = (repId, mode) => (key, ok) =>
     update(cur => {
@@ -539,6 +607,7 @@ function App() {
         removeRepertoire(rep.id);
         go('home');
       }}
+      isCourse=${isCourseId(rep.id)}
       back=${() => go('home')}
       openLogin=${cloudEnabled() ? () => setShowAccount(true) : null}
     />`;
@@ -558,6 +627,12 @@ function App() {
       go=${go}
       account=${account}
       openLogin=${cloudEnabled() ? () => setShowAccount(true) : null}
+      moreCourses=${account ? entitled.filter(r => (db.settings.coursesRemoved || {})[r.id] && !db.repertoires.some(x => x.id === 'course-' + r.id)) : null}
+      hasCourses=${!!account && entitled.length > 0}
+      courseBusy=${courseBusyAdd}
+      onAddCourse=${addCourse}
+      onChooseCourses=${() => setChoice({ first: false })}
+      removeMany=${ids => ids.forEach(removeRepertoire)}
     />`;
   }
 
@@ -602,6 +677,14 @@ function App() {
       </div>
     </header>
     ${showBoard && html`<${BoardSettings} settings=${db.settings} setSettings=${setSettings} onClose=${() => setShowBoard(false)} />`}
+    ${choice && account && entitled.length > 0 &&
+    html`<${CourseChoice}
+      courses=${entitled}
+      first=${choice.first}
+      chosen=${c => (db.settings.coursesChosen ? db.repertoires.some(r => r.id === 'course-' + c.id && !r.locked) : defaultPick(c))}
+      onApply=${applyChoice}
+      onClose=${() => setChoice(null)}
+    />`}
     ${showAccount &&
     html`<${AccountDialog}
       account=${account}

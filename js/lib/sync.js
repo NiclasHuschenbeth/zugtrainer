@@ -9,7 +9,7 @@
 //   Gelöschtes:      wird als gelöscht markiert (sonst käme es vom anderen Gerät zurück).
 //   Kurse:           der Kursinhalt bleibt auf dem Gerät, nur der Lernfortschritt wird abgeglichen.
 
-export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded', 'depth', 'from', 'ranges', 'alts', 'drillFollow', 'scopes', 'keyScopes', 'keySize', 'keyShuffle', 'keyAuto', 'engineLines', 'boardTheme', 'boardSize', 'showDests', 'anim', 'tempo', 'moveInput', 'coords', 'coursesRemoved', 'maiaElo', 'refOff'];
+export const SYNC_SETTINGS = ['teach', 'sound', 'explorer', 'coverMin', 'opponent', 'cloud', 'varArrows', 'engine', 'onboarded', 'depth', 'from', 'ranges', 'alts', 'drillFollow', 'scopes', 'keyScopes', 'keySize', 'keyShuffle', 'keyAuto', 'engineLines', 'boardTheme', 'boardSize', 'showDests', 'anim', 'tempo', 'moveInput', 'coords', 'coursesRemoved', 'maiaElo', 'refOff', 'oppDb', 'coursesChosen', 'coursesKnown'];
 const DAY = 86400000;
 const BATCH = 500;
 

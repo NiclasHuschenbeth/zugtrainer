@@ -175,10 +175,8 @@ class Game {
         if (move) pick = { move, share: m.n / total };
       }
     } catch (err) {
-      if (err.auth) {
-        if (run === this.run) this.onAuth && this.onAuth();
-        return;
-      }
+      // Lichess-Anmeldung abgelaufen: abmelden und mit Maia weiterspielen (siehe unten)
+      if (err.auth && run === this.run) this.onAuth && this.onAuth();
     }
     // keine Partien mehr in der Datenbank: Maia spielt menschlich weiter
     if (!pick && preset !== 'sf' && preset !== 'maia' && run === this.run) pick = await this.maia(fen, PRESET_ELO[preset] || maiaElo || MAIA_DEFAULT);
@@ -300,18 +298,23 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
   const maiaCached = useMaiaCached();
   const token = settings.lichessToken;
   const optsRef = useRef(null);
-  // Ohne eigene Wahl: mit Lichess-Anmeldung die Datenbank, sonst Maia (zieht wie ein Mensch, braucht keine Anmeldung)
-  const opp = settings.opponent || (token ? settings.explorer : 'maia');
-  const needLogin = opp !== 'sf' && opp !== 'maia' && !token;
+  // Gegner: 'db' (echte Partien aus der Lichess-Datenbank), 'maia' oder 'sf'.
+  // Früher stand hier direkt die Datenbank-Gruppe (all, low, …): die gilt als 'db' mit dieser Gruppe.
+  const legacy = settings.opponent && PRESETS[settings.opponent] ? settings.opponent : null;
+  const opp = legacy ? 'db' : settings.opponent || (token ? 'db' : 'maia');
+  const dbPreset = settings.oppDb || legacy || 'mid';
   const maiaElo = settings.maiaElo || MAIA_DEFAULT;
-  optsRef.current = { preset: opp, token, sound: settings.sound, maiaElo };
+  // Datenbank ohne Lichess-Anmeldung: Maia spielt stattdessen (das Brett bleibt, daneben ein Hinweis)
+  const dbNoLogin = opp === 'db' && !token;
+  const preset = opp === 'db' ? (token ? dbPreset : 'maia') : opp;
+  optsRef.current = { preset, token, sound: settings.sound, maiaElo: opp === 'db' ? PRESET_ELO[dbPreset] || maiaElo : maiaElo };
+  const setOpp = v => setSettings({ opponent: v, ...(legacy ? { oppDb: legacy } : {}) });
   const gradeRef = useRef(onGrade);
   gradeRef.current = onGrade;
   const game = useRef(null);
   const cg = useRef(null);
 
   useEffect(() => {
-    if (needLogin) return;
     const g = new Game(rep, () => optsRef.current, force, (k, ok) => gradeRef.current(k, ok));
     g.onAuth = () => setSettings({ lichessToken: null });
     if (cg.current) cg.current.set({ orientation: rep.color });
@@ -322,20 +325,7 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
       g.destroy();
       game.current = null;
     };
-  }, [needLogin]);
-
-  if (needLogin) {
-    return html`<div class="card">
-      <h2>Testpartie: ${rep.name}</h2>
-      <p class="muted">In der Testpartie spielst du dein Repertoire gegen Züge, die echte Gegner auf Lichess in der jeweiligen Stellung spielen. Dafür braucht der Zugtrainer die Lichess-Partiendatenbank, und die gibt Lichess nur für angemeldete Nutzer frei. Der Zugtrainer erhält dabei keine Rechte auf deinem Konto.</p>
-      <div class="row">
-        <button class="btn primary" onClick=${() => startLogin({ name: 'scrim', repId: rep.id })}>Mit Lichess anmelden</button>
-        <button class="btn" onClick=${() => setSettings({ opponent: 'maia' })}>Ohne Anmeldung gegen Maia spielen (zieht wie ein Mensch)</button>
-        <button class="btn" onClick=${() => setSettings({ opponent: 'sf' })}>Gegen Stockfish spielen</button>
-        <button class="btn ghost" onClick=${onExit}>Zurück</button>
-      </div>
-    </div>`;
-  }
+  }, []);
 
   const g = game.current;
   const r = g && g.result;
@@ -372,19 +362,25 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>
       <p class="muted small">Du spielst dein Repertoire gegen echte Gegnerzüge. Verlässt die Partie dein Repertoire, bewertet die Engine die Stellung.</p>
-      <label class="small">Gegner
-        <select value=${opp} onChange=${e => setSettings({ opponent: e.target.value })}>
-          ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label}</option>`)}
-          <option value="maia">Maia (zieht wie ein Mensch, ohne Anmeldung)</option>
-          <option value="sf">Stockfish (Computer, ohne Anmeldung)</option>
+      <div class="opp-choice small" role="radiogroup" aria-label="Gegner">
+        <b>Gegner</b>
+        <label class="check"><input type="radio" name="opp" checked=${opp === 'db'} onChange=${() => setOpp('db')} /> Echte Partien <span class="muted">(Lichess-Datenbank: die Züge, die Spieler dort am häufigsten wählen)</span></label>
+        <label class="check"><input type="radio" name="opp" checked=${opp === 'maia'} onChange=${() => setOpp('maia')} /> Maia <span class="muted">(zieht wie ein Mensch)</span></label>
+        <label class="check"><input type="radio" name="opp" checked=${opp === 'sf'} onChange=${() => setOpp('sf')} /> Stockfish <span class="muted">(volle Stärke)</span></label>
+      </div>
+      ${opp === 'db' && html`<label class="small">Spielstärke
+        <select value=${dbPreset} onChange=${e => setSettings({ oppDb: e.target.value, ...(legacy ? { opponent: 'db' } : {}) })}>
+          ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label.replace(/^Lichess – /, '')}</option>`)}
         </select>
-      </label>
+      </label>`}
+      ${dbNoLogin && html`<div class="msg info small">Lichess gibt seine Datenbank nur für angemeldete Nutzer frei. Bis dahin spielt Maia.${' '}
+        <button class="link" onClick=${() => startLogin({ name: 'scrim', repId: rep.id })}>Mit Lichess anmelden</button></div>`}
       ${opp === 'maia' && html`<label class="small">Spielstärke
         <select value=${maiaElo} onChange=${e => setSettings({ maiaElo: +e.target.value })}>
           ${MAIA_LEVELS.map(l => html`<option value=${l}>ca. ${l} (Lichess-Wertung)</option>`)}
         </select>
       </label>`}
-      ${opp === 'maia' && maiaCached === false && !maiaReady && html`<p class="muted small">Maia wird beim ersten Gegnerzug geladen: einmalig ca. 22 MB, danach auch ohne Internet. Am Handy am besten im WLAN starten.</p>`}
+      ${(opp === 'maia' || dbNoLogin) && maiaCached === false && !maiaReady && html`<p class="muted small">Maia wird beim ersten Gegnerzug geladen: einmalig ca. 22 MB, danach auch ohne Internet. Am Handy am besten im WLAN starten.</p>`}
       <div class="status">${status}</div>
       ${g && g.moves.length > 0 && html`<div class="tree">${de(g.moves.join(' '))}</div>`}
       <div class="row trainer-actions">

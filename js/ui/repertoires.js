@@ -10,6 +10,7 @@ import { HomeReco } from './reco.js';
 import { CoveragePanel } from './editor.js';
 import { CONFIG } from '../config.js';
 import { pgnAuthor } from '../lib/reference.js';
+import { MoreCourses } from './coursechoice.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -54,8 +55,10 @@ function WeekMini({ activity }) {
 
 const addSample = addRepertoire => addRepertoire({ name: SAMPLE_NAME, color: SAMPLE_COLOR, chapters: parseRepertoirePgn(SAMPLE_PGN) });
 
-export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin }) {
+export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin, moreCourses, hasCourses, courseBusy, onAddCourse, onChooseCourses, removeMany }) {
   const [uploadOpen, setUploadOpen] = useState(() => !!pendingStudy());
+  const [editing, setEditing] = useState(false); // "Liste bearbeiten": mehrere Repertoires auf einmal entfernen
+  const [picked, setPicked] = useState(() => new Set());
   const reps = color => db.repertoires.filter(r => r.color === color);
   const hasProgress = Object.values(db.progress).some(p => Object.keys(p).length > 0);
   const onboarding = !db.settings.onboarded && !db.sync.last;
@@ -69,11 +72,47 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
   }
   const showInstall = (db.settings.lessons || 0) >= 1 && !db.settings.installHint;
   const none = db.repertoires.length === 0;
+  const pick = (id, on) => {
+    const n = new Set(picked);
+    on ? n.add(id) : n.delete(id);
+    setPicked(n);
+  };
+  const stopEdit = () => {
+    setEditing(false);
+    setPicked(new Set());
+  };
+  const isCourse = id => String(id).startsWith('course-');
+  const removePicked = () => {
+    const ids = [...picked];
+    const courses = ids.filter(isCourse).length;
+    const own = ids.length - courses;
+    const parts = [];
+    if (own) parts.push(`${own} ${own === 1 ? 'Repertoire wird' : 'Repertoires werden'} samt Lernfortschritt gelöscht`);
+    if (courses) parts.push(`${courses} ${courses === 1 ? 'Kurs wird' : 'Kurse werden'} ausgeblendet (Lernstand bleibt, zurückholen unter „Weitere freigeschaltete Kurse“)`);
+    if (!confirm(parts.join('.\n') + '.')) return;
+    removeMany(ids);
+    stopEdit();
+  };
   const group = (title, list) =>
     list.length > 0 &&
     html`<section class="stack tight">
-      <h2 class="section">${title}</h2>
-      <div class="card rep-list">${list.map(rep => html`<${RepRow} key=${rep.id} rep=${rep} db=${db} train=${train} open=${() => open(rep.id)} />`)}</div>
+      <div class="row between">
+        <h2 class="section">${title}</h2>
+        ${editing && html`<button class="link small" onClick=${() => {
+          const all = list.every(r => picked.has(r.id));
+          const n = new Set(picked);
+          list.forEach(r => (all ? n.delete(r.id) : n.add(r.id)));
+          setPicked(n);
+        }}>${list.every(r => picked.has(r.id)) ? 'Keine auswählen' : 'Alle auswählen'}</button>`}
+      </div>
+      <div class="card rep-list">${list.map(rep =>
+        editing
+          ? html`<label class="rep-row edit-row" key=${rep.id}>
+              <input type="checkbox" checked=${picked.has(rep.id)} onChange=${e => pick(rep.id, e.target.checked)} />
+              <b>${rep.name}</b>${isCourse(rep.id) && html` <span class="muted small">Kurs</span>`}
+            </label>`
+          : html`<${RepRow} key=${rep.id} rep=${rep} db=${db} train=${train} open=${() => open(rep.id)} />`,
+      )}</div>
     </section>`;
 
   return html`<div class="stack">
@@ -86,8 +125,18 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
       <button class="btn primary" onClick=${openLogin}>Anmelden</button>
     </div>`}
     <${HomeReco} db=${db} setSettings=${setSettings} go=${go} />
+    ${!none && html`<div class="row between list-tools">
+      ${editing
+        ? html`<span class="muted small">${picked.size} ausgewählt</span>
+            <span class="row">
+              <button class="btn small danger" disabled=${!picked.size} onClick=${removePicked}>Ausgewählte entfernen</button>
+              <button class="btn small ghost" onClick=${stopEdit}>Fertig</button>
+            </span>`
+        : html`<span></span><button class="link small" onClick=${() => setEditing(true)}>Liste bearbeiten</button>`}
+    </div>`}
     ${group('Mit Weiß', reps('white'))}
     ${group('Mit Schwarz', reps('black'))}
+    ${hasCourses && moreCourses && !editing && html`<${MoreCourses} courses=${moreCourses} busy=${courseBusy} onAdd=${onAddCourse} onChoose=${onChooseCourses} />`}
     ${!none && html`<${WeekMini} activity=${db.activity} />`}
   </div>`;
 }
@@ -236,7 +285,7 @@ export function RepertoireView(props) {
   </div>`;
 }
 
-function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, editAt, scrim, compare, remove, back }) {
+function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, edit, editAt, scrim, compare, remove, back, isCourse }) {
   const scope = scopeOf(db.settings, rep);
   const lessons = lessonsOf(rep);
   const prio = hasPriority(rep);
@@ -305,7 +354,9 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
           <${MenuItem} title="Meine Partien auswerten" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
           <${MenuDivider} />
-          <${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />
+          ${isCourse
+            ? html`<${MenuItem} title="Kurs ausblenden" hint="Lernstand bleibt; zurückholen auf der Startseite unter „Weitere freigeschaltete Kurse“" onClick=${() => confirm(`Kurs „${rep.name}“ aus der Liste nehmen? Dein Lernstand bleibt erhalten.`) && remove()} />`
+            : html`<${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />`}
         <//>
       </div>
       <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>

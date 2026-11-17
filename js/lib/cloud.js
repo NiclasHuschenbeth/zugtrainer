@@ -108,7 +108,7 @@ export async function fetchCourses(ids) {
 /** Nur Kennung und Versionsnummer der freigeschalteten Kurse (klein; läuft bei jedem Abgleich). */
 export async function fetchCourseVersions() {
   const c = await getClient();
-  return must(await c.from('courses').select('id,version'));
+  return must(await c.from('courses').select('id,version,name,color'));
 }
 
 /** Server-Seite des Abgleichs auf Basis von Supabase. */

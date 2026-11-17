@@ -9,6 +9,7 @@ import { RangeSlider, rangeLabel } from './rangeslider.js';
 import { HomeReco } from './reco.js';
 import { CoveragePanel } from './editor.js';
 import { CONFIG } from '../config.js';
+import { pgnAuthor } from '../lib/reference.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -458,6 +459,7 @@ function LichessImport({ addRepertoire, token, onDone }) {
 
 function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
   const [name, setName] = useState('');
+  const [author, setAuthor] = useState('');
   const [color, setColor] = useState('white');
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
@@ -482,8 +484,10 @@ function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
       if (!chapters.length) return setError('In der PGN wurden keine gültigen Züge gefunden.');
       const firstPgn = files.find(f => !/\.json$/i.test(f.name));
       const fallback = firstPgn ? firstPgn.name.replace(/\.pgn$/i, '') : chapters[0].name;
-      addRepertoire({ name: name.trim() || fallback, color, chapters, ...(keySolutions ? { keySolutions } : {}) });
+      const by = author.trim() || pgnAuthor(pgn);
+      addRepertoire({ name: name.trim() || fallback, color, chapters, ...(by ? { author: by } : {}), ...(keySolutions ? { keySolutions } : {}) });
       setName('');
+      setAuthor('');
       setText('');
       setFiles([]);
       ev.target.reset();
@@ -539,6 +543,10 @@ function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
         </select>
       </label>
     </div>
+    <label>Autor (freiwillig)
+      <input type="text" value=${author} onInput=${e => setAuthor(e.target.value)} placeholder="z. B. bei einem gekauften Kurs" />
+    </label>
+    <p class="muted small">Titel und Autor erscheinen im Analyse-Brett, wenn dort Züge aus diesem Repertoire angezeigt werden. Steht der Autor in der PGN-Datei, wird er automatisch übernommen.</p>
     <label>PGN-Datei(en)
       <input type="file" accept=".pgn,.json,text/plain,application/json" multiple onChange=${e => setFiles([...e.target.files])} />
     </label>

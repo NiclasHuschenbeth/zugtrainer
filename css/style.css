@@ -565,6 +565,16 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .ed-info { order: 3; flex: 0 1 auto; min-height: 110px; max-height: 38%; overflow: auto; }
 .ed-info .card { border: 0; box-shadow: none; padding: 0; background: none; }
 .ed-pane[hidden] { display: none; }
+/* Referenz: Züge aus den eigenen Repertoires */
+.ref-line { display: flex; flex-wrap: wrap; gap: .25rem .9rem; align-items: baseline; margin-top: .4rem; padding: .35rem .6rem; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); }
+.ref-line .ref-move { font-weight: 400; }
+.ref-line .ref-move.main { font-weight: 700; }
+.ref-panel .ref-rep { padding-top: .4rem; border-top: 1px solid var(--line); }
+.ref-panel .ref-rep:first-of-type { border-top: 0; padding-top: 0; }
+.ref-row { display: flex; gap: .6rem; align-items: flex-start; margin-top: .35rem; }
+.ref-row .btn { flex: none; min-width: 4.2rem; }
+.ref-comment { margin-top: .15rem; }
+.ref-choose summary { cursor: pointer; }
 .editor.v2 .off { display: none; }
 .link.danger { color: var(--bad); }
 .link:disabled { color: var(--muted); cursor: default; text-decoration: none; }

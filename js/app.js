@@ -402,10 +402,10 @@ function App() {
   };
 
   // source: Herkunft, z. B. { lichessStudy: '<Kennung>' } (für ein späteres "Neu von Lichess holen")
-  const addRepertoire = ({ name, color, chapters, keySolutions, source }) => {
+  const addRepertoire = ({ name, color, chapters, keySolutions, source, author }) => {
     const id = crypto.randomUUID();
     update(cur => ({
-      repertoires: [...cur.repertoires, { id, name, color, chapters, ...(keySolutions ? { keySolutions } : {}), ...(source ? { source } : {}), createdAt: Date.now(), updatedAt: Date.now() }],
+      repertoires: [...cur.repertoires, { id, name, color, chapters, ...(author ? { author } : {}), ...(keySolutions ? { keySolutions } : {}), ...(source ? { source } : {}), createdAt: Date.now(), updatedAt: Date.now() }],
     }));
     return id;
   };
@@ -459,6 +459,8 @@ function App() {
     ? { ...db, repertoires: db.repertoires.map(r => (lockOf(r) ? { ...r, chapters: [], keySolutions: undefined, videos: undefined, lock: lockOf(r) } : r)) }
     : db;
   const rep = view.repId ? vdb.repertoires.find(r => r.id === view.repId) : null;
+  // Repertoires als Referenz im Analyse-Brett/Editor (gesperrte Kurse haben keine Züge)
+  const refReps = vdb.repertoires.filter(r => !r.lock && !r.locked && r.chapters && r.chapters.length);
   // Lernen, Editor und Testpartie gibt es für gesperrte Kurse nicht: stattdessen die Kursseite mit dem Hinweis
   const vname = rep && rep.lock && ['train', 'edit', 'scrim'].includes(view.name) ? 'rep' : view.name;
   let body;
@@ -503,12 +505,12 @@ function App() {
       onDone=${() => view.mode !== 'practice' && update(cur => ({ settings: { ...cur.settings, lessons: (cur.settings.lessons || 0) + 1 } }))}
     />`;
   } else if (vname === 'edit' && rep) {
-    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} />`;
+    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} refs=${refReps.filter(r => r.id !== rep.id)} />`;
   } else if (view.name === 'maia-test') {
     body = html`<${MaiaTest} onExit=${() => go('home')} />`;
   } else if (view.name === 'analyse') {
     // Freies Analysebrett: der Editor auf einem Notizblock, der nur bis zum Neuladen der Seite bleibt (nichts wird gespeichert)
-    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} />`;
+    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} refs=${refReps} />`;
   } else if (vname === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}

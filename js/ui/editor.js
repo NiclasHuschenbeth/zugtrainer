@@ -13,6 +13,7 @@ import { lineText, scanCoverage } from '../lib/coverage.js';
 import { parsePgn, startingPosition } from 'chessops/pgn.js';
 import { epdOf, parseRepertoirePgn } from '../lib/repertoire.js';
 import { Board } from './board.js';
+import { authorOf, lastKnown, refsAt } from '../lib/reference.js';
 
 const GLYPHS = ['!', '?', '!!', '??', '!?', '?!'];
 const POS = [['=', 'ausgeglichen'], ['∞', 'unklar'], ['⩲', 'Weiß steht etwas besser'], ['⩱', 'Schwarz steht etwas besser'], ['±', 'Weiß steht besser'], ['∓', 'Schwarz steht besser'], ['+−', 'Weiß steht auf Gewinn'], ['−+', 'Schwarz steht auf Gewinn']];
@@ -31,7 +32,7 @@ function useNarrow() {
   return narrow;
 }
 
-export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free }) {
+export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free, refs = [] }) {
   const work = useRef(null);
   if (!work.current) work.current = structuredClone(rep);
   const w = work.current;
@@ -248,7 +249,15 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
   };
 
   const infoTab = !narrow && tab === 'moves' ? 'engine' : tab;
-  const TABS = [['moves', 'Züge'], ['engine', 'Stockfish'], ['cloud', 'Cloud'], ['db', 'Datenbank'], ['games', 'Partien']];
+  const TABS = [['moves', 'Züge'], ['engine', 'Stockfish'], ['cloud', 'Cloud'], ['db', 'Datenbank'], ...(refs.length ? [['refs', 'Repertoires']] : []), ['games', 'Partien']];
+
+  // Referenz: Züge aus den anderen Repertoires (Kurse, hochgeladene, eigene) in dieser Stellung
+  const refOff = settings.refOff || {};
+  const refReps = refs.filter(r => !refOff[r.id]);
+  const hits = refsAt(refReps, fen);
+  const fens = [chapter.startFen, ...trail.map(n => n.fen)];
+  const known = hits.length ? fens.length - 1 : lastKnown(refReps, fens);
+  const lastText = known > 0 ? `nach ${moveText(known > 1 ? trail[known - 2].fen : chapter.startFen, trail[known - 1].san)}` : 'ab der Ausgangsstellung';
   const playSan = san => playMove(parseSan(posFromFen(fen), san));
 
   return html`<div class=${`editor v2 ${free ? 'free' : ''}`}>
@@ -270,6 +279,13 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
         <button class="btn small" onClick=${() => setFlipped(!flipped)} title="Brett drehen (F)">⇅ Drehen</button>
         <label class="check small" title="Zeigt die Züge, die an dieser Stelle schon im Repertoire stehen, als Pfeile"><input type="checkbox" checked=${arrows} onChange=${e => setSettings({ varArrows: e.target.checked })} /> Pfeile</label>
       </div>
+      ${refReps.length > 0 && (hits.length > 0 || known >= 0) && html`<div class="ref-line small" title="Züge aus deinen Repertoires in dieser Stellung (Details im Reiter „Repertoires“)">
+        ${hits.length
+          ? hits.map(h => html`<span class="ref-item"><span class="muted">${h.rep.name}:</span>${' '}${h.moves.length
+              ? html`${h.moves.slice(0, 3).map((m, i) => html`${i ? ' ' : ''}<button class=${`link ref-move ${m.main && m.own ? 'main' : ''}`} onClick=${() => playSan(m.san)}>${moveText(fen, m.san)}</button>`)}${h.moves.length > 3 && html`${' '}<button class="link muted" title="Alle Züge im Reiter „Repertoires“" onClick=${() => setTab('refs')}>+${h.moves.length - 3}</button>`}`
+              : html`<span class="muted">Linie endet</span>`}</span>`)
+          : html`<span class="muted">Nicht mehr im Repertoire (zuletzt ${lastText})</span>`}
+      </div>`}
     </div>
 
     <div class="editor-side">
@@ -295,6 +311,9 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
                 <option value="black">Repertoire für Schwarz</option>
               </select>
             </label>
+            ${!String(w.id).startsWith('course-') && html`<label>Autor (freiwillig)
+              <input type="text" value=${w.author || ''} onInput=${e => { w.author = e.target.value.trim() || undefined; commit(); }} />
+            </label>`}
           </div>`}
           <label>Name dieses Kapitels
             <input type="text" value=${chapter.name} onInput=${e => { chapter.name = e.target.value || 'Kapitel'; commit(); }} />
@@ -342,6 +361,9 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
         <div class="ed-pane" hidden=${infoTab !== 'db'}>
           <${ExplorerPanel} fen=${fen} settings=${settings} setSettings=${setSettings} returnTo=${free ? { name: 'analyse' } : { name: 'edit', repId: w.id }} onPlay=${playSan} />
         </div>
+        ${refs.length > 0 && html`<div class="ed-pane" hidden=${infoTab !== 'refs'}>
+          <${RefPanel} refs=${refs} refOff=${refOff} setRefOff=${v => setSettings({ refOff: v })} hits=${hits} fen=${fen} known=${known} lastText=${lastText} onPlay=${playSan} />
+        </div>`}
         <div class="ed-pane" hidden=${infoTab !== 'games'}>
           <${ModelGamesPanel} fen=${fen} token=${settings.lichessToken} orientation=${orient} active=${infoTab === 'games'} />
         </div>
@@ -574,6 +596,44 @@ function EnginePanel({ fen, enabled, setEnabled, lines, setLines, onPlayLine, on
 
 // Hat nichts mit der eigenen Anmeldung zu tun: der Server der Lichess-Eröffnungsdatenbank antwortet nicht
 const LICHESS_DOWN = 'Die Eröffnungsdatenbank von Lichess antwortet gerade nicht. Das liegt am Lichess-Server, nicht an deiner Anmeldung. Bitte später noch einmal versuchen.';
+
+/** Reiter „Repertoires“: Züge aus den eigenen Repertoires in dieser Stellung, mit Kapitel und Kommentar. */
+function RefPanel({ refs, refOff, setRefOff, hits, fen, known, lastText, onPlay }) {
+  const active = refs.filter(r => !refOff[r.id]);
+  const toggle = (id, on) => {
+    const next = { ...refOff };
+    if (on) delete next[id];
+    else next[id] = true;
+    setRefOff(next);
+  };
+  const short = t => (t.length > 220 ? t.slice(0, 210).trimEnd() + ' …' : t);
+  return html`<div class="card stack tight ref-panel">
+    <h3 class="flat">Züge aus deinen Repertoires</h3>
+    ${!active.length
+      ? html`<p class="muted small">Kein Repertoire ausgewählt.</p>`
+      : hits.length
+        ? hits.map(h => html`<div class="ref-rep">
+            <div><b>${h.rep.name}</b>${authorOf(h.rep) && html`<span class="muted small"> · ${authorOf(h.rep)}</span>`}</div>
+            ${h.moves.length
+              ? h.moves.map(m => html`<div class="ref-row">
+                  <button class=${`btn small ${m.main && m.own ? 'primary' : ''}`} onClick=${() => onPlay(m.san)} title="Zug spielen">${moveText(fen, m.san)}</button>
+                  <div class="small">
+                    <span class=${m.main && m.own ? '' : 'muted'}>${!m.own ? 'Gegnerzug im Repertoire' : m.main ? 'Hauptzug' : 'Nebenvariante'}</span>
+                    <span class="muted"> · Kapitel „${m.chapter}“</span>
+                    ${m.comment && html`<div class="muted ref-comment">„${short(m.comment)}“</div>`}
+                  </div>
+                </div>`)
+              : html`<div class="muted small">Hier endet die Linie (Kapitel „${h.end}“).</div>`}
+          </div>`)
+        : html`<p class="muted small">${known >= 0 ? `Diese Stellung steht in keinem ausgewählten Repertoire. Zuletzt im Repertoire ${lastText}.` : 'Diese Stellung steht in keinem ausgewählten Repertoire.'}</p>`}
+    <details class="ref-choose">
+      <summary class="small">Welche Repertoires? (${active.length} von ${refs.length})</summary>
+      <div class="stack tight">
+        ${refs.map(r => html`<label class="check small"><input type="checkbox" checked=${!refOff[r.id]} onChange=${e => toggle(r.id, e.target.checked)} /> ${r.name}${authorOf(r) ? ` · ${authorOf(r)}` : ''} <span class="muted">(${r.color === 'white' ? 'Weiß' : 'Schwarz'})</span></label>`)}
+      </div>
+    </details>
+  </div>`;
+}
 
 function ExplorerPanel({ fen, settings, setSettings, returnTo, onPlay }) {
   const [state, setState] = useState({ data: null, error: '', loading: false });

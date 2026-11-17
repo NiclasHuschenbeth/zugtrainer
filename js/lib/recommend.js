@@ -176,11 +176,15 @@ export function recommend(games, color, catalog, { owned = new Set(), hidden = {
   // Auswahl: höchstens MAX_CARDS; keine zwei Karten, die sich überwiegend auf dieselben Partien stützen
   const out = [];
   const used = new Set();
+  // Erste Gegnerzüge, zu denen schon eine Kurs-Karte ("plays") steht: dort keinen Wechsel-Vorschlag zusätzlich
+  const covered = new Set();
   for (const x of cands) {
     if (hidden[x.course.id]) continue;
     const overlap = x.games.filter(g => used.has(g)).length;
     if (overlap > x.games.length / 2) continue;
+    if (x.kind === 'faces' && covered.has(x.games[0].moves[0])) continue;
     x.games.forEach(g => used.add(g));
+    if (x.kind === 'plays') x.games.forEach(g => covered.add(g.moves[0]));
     const s = x.stats;
     out.push({
       id: x.course.id,

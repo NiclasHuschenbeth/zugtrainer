@@ -48,7 +48,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
   const [addOpen, setAddOpen] = useState(false);
   const [more, setMore] = useState(false);
   const narrow = useNarrow();
-  const [tab, setTab] = useState(() => (matchMedia(NARROW).matches ? 'moves' : 'engine')); // moves (nur schmal) | engine | cloud | db | games
+  const [tab, setTab] = useState(() => (matchMedia(NARROW).matches ? 'moves' : 'overview')); // moves (nur schmal) | overview | engine | cloud | db | refs | games
   const arrows = settings.varArrows !== false;
   const cg = useRef(null);
   const timer = useRef(null);
@@ -248,8 +248,8 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     commit();
   };
 
-  const infoTab = !narrow && tab === 'moves' ? 'engine' : tab;
-  const TABS = [['moves', 'Züge'], ['engine', 'Stockfish'], ['cloud', 'Cloud'], ['db', 'Datenbank'], ...(refs.length ? [['refs', 'Repertoires']] : []), ['games', 'Partien']];
+  const infoTab = !narrow && tab === 'moves' ? 'overview' : tab;
+  const TABS = [['moves', 'Züge'], ['overview', 'Übersicht'], ['engine', 'Stockfish'], ['cloud', 'Cloud'], ['db', 'Datenbank'], ...(refs.length ? [['refs', 'Repertoires']] : []), ['games', 'Partien']];
 
   // Referenz: Züge aus den anderen Repertoires (Kurse, hochgeladene, eigene) in dieser Stellung
   const refOff = settings.refOff || {};
@@ -352,6 +352,9 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
       </div>
 
       <div class=${`card ed-info ${infoTab === 'moves' ? 'off' : ''}`}>
+        <div class="ed-pane" hidden=${infoTab !== 'overview'}>
+          <${OverviewPanel} fen=${fen} settings=${settings} setSettings=${setSettings} returnTo=${free ? { name: 'analyse' } : { name: 'edit', repId: w.id }} hits=${hits} hasRefs=${refReps.length > 0} active=${infoTab === 'overview'} onPlay=${playSan} />
+        </div>
         <div class="ed-pane" hidden=${infoTab !== 'engine'}>
           <${EnginePanel} fen=${fen} enabled=${settings.engine} setEnabled=${v => setSettings({ engine: v })} lines=${Math.min(5, Math.max(1, settings.engineLines || 3))} setLines=${n => setSettings({ engineLines: n })} onPlayLine=${playLine} onBest=${setBest} orientation=${orient} />
         </div>
@@ -632,6 +635,120 @@ function RefPanel({ refs, refOff, setRefOff, hits, fen, known, lastText, onPlay 
         ${refs.map(r => html`<label class="check small"><input type="checkbox" checked=${!refOff[r.id]} onChange=${e => toggle(r.id, e.target.checked)} /> ${r.name}${authorOf(r) ? ` · ${authorOf(r)}` : ''} <span class="muted">(${r.color === 'white' ? 'Weiß' : 'Schwarz'})</span></label>`)}
       </div>
     </details>
+  </div>`;
+}
+
+/**
+ * Übersicht: Datenbank (Lichess, wenn angemeldet), Cloud-Bewertung (wenn eingeschaltet) und Repertoire-Züge
+ * in einer Tabelle, eine Zeile pro Zug. Klick auf eine Zeile spielt den Zug.
+ */
+function OverviewPanel({ fen, settings, setSettings, returnTo, hits, hasRefs, active, onPlay }) {
+  const token = settings.lichessToken;
+  const preset = settings.explorer;
+  const cloudOn = !!settings.cloud;
+  const [db, setDb] = useState({ fen: null, data: null, error: '' });
+  const [cloud, setCloud] = useState({ fen: null, data: null, error: '' });
+
+  useEffect(() => {
+    if (!token || !active) return;
+    let live = true;
+    const t = setTimeout(() => {
+      explore(fen, preset, token)
+        .then(data => live && setDb({ fen, data, error: '' }))
+        .catch(err => {
+          if (!live) return;
+          if (err.auth) setSettings({ lichessToken: null });
+          setDb({ fen, data: null, error: err.auth ? '' : err instanceof TypeError ? LICHESS_DOWN : err.message });
+        });
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [fen, preset, token, active]);
+
+  useEffect(() => {
+    if (!cloudOn || !active) return;
+    let live = true;
+    const t = setTimeout(() => {
+      cdbMoves(fen)
+        .then(data => live && setCloud({ fen, data, error: '' }))
+        .catch(err => live && setCloud({ fen, data: null, error: err instanceof TypeError ? 'Keine Verbindung zu ChessDB.' : err.message }));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [fen, cloudOn, active]);
+
+  const d = token && db.fen === fen ? db.data : null;
+  const c = cloudOn && cloud.fen === fen && cloud.data && cloud.data.status === 'ok' ? cloud.data : null;
+  const fmt = n => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' Mio.' : n >= 1e4 ? Math.round(n / 1e3) + ' Tsd.' : n.toLocaleString('de-DE'));
+
+  // Zeilen zusammenführen: Datenbank-Züge (nach Häufigkeit), dann Cloud-Züge, dann Repertoire-Züge
+  const rows = new Map();
+  const row = san => {
+    if (!rows.has(san)) rows.set(san, { san, games: null, cloud: null, reps: [] });
+    return rows.get(san);
+  };
+  const total = d ? d.white + d.draws + d.black : 0;
+  if (d) for (const m of d.moves) row(m.san).games = m;
+  if (c) {
+    const extra = Math.max(3, 10 - rows.size);
+    let added = 0;
+    for (const m of c.moves) {
+      if (rows.has(m.san)) rows.get(m.san).cloud = m;
+      else if (added < extra) {
+        row(m.san).cloud = m;
+        added++;
+      }
+    }
+  }
+  for (const h of hits) for (const m of h.moves) row(m.san).reps.push({ name: h.rep.name, main: m.main && m.own });
+  const list = [...rows.values()];
+  const loadingDb = token && active && db.fen !== fen;
+  const loadingCloud = cloudOn && active && cloud.fen !== fen;
+
+  return html`<div class="card stack tight overview">
+    <div class="row between">
+      <h3 class="flat">Übersicht ${d && d.opening ? html`<span class="muted small">${d.opening.eco} ${d.opening.name}</span>` : ''}</h3>
+      <span class="row">
+        ${token && html`<select class="auto small" value=${preset} onChange=${e => setSettings({ explorer: e.target.value })} title="Welche Partien gezählt werden">
+          ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label}</option>`)}
+        </select>`}
+        <label class="check small" title="Computer-Bewertungen von chessdb.cn (Stellung und IP-Adresse gehen an Server in China)"><input type="checkbox" checked=${cloudOn} onChange=${e => setSettings({ cloud: e.target.checked })} /> Cloud</label>
+      </span>
+    </div>
+    ${db.error && token && html`<div class="msg bad small">${db.error}</div>`}
+    ${cloud.error && cloudOn && html`<div class="msg bad small">${cloud.error}</div>`}
+    ${list.length > 0
+      ? html`<table class="table explorer ov-table">
+          <thead><tr>
+            <th>Zug</th>
+            ${token && html`<th class="right">Partien</th>`}
+            ${token && html`<th class="wide">Ergebnis</th>`}
+            ${cloudOn && html`<th class="right">Cloud</th>`}
+            ${hasRefs && html`<th>Repertoire</th>`}
+          </tr></thead>
+          <tbody>
+            ${list.map(r => {
+              const g = r.games;
+              const n = g ? g.white + g.draws + g.black : 0;
+              const p = x => `${(x / n) * 100}%`;
+              return html`<tr onClick=${() => onPlay(r.san)} title="Zug spielen">
+                <td><b>${moveText(fen, r.san)}</b></td>
+                ${token && html`<td class="right muted" title=${g && total ? `${Math.round((n / total) * 100)} % der Partien` : ''}>${g ? fmt(n) : '–'}</td>`}
+                ${token && html`<td class="wide">${g ? html`<div class="wdlbar"><i class="w" style=${{ width: p(g.white) }}>${Math.round((g.white / n) * 100)}</i><i class="d" style=${{ width: p(g.draws) }}></i><i class="b" style=${{ width: p(g.black) }}>${Math.round((g.black / n) * 100)}</i></div>` : ''}</td>`}
+                ${cloudOn && html`<td class="right">${r.cloud ? html`<b class=${r.cloud.cp >= 0 ? 'ev w' : 'ev b'}>${formatCloud(r.cloud.cp)}</b>` : html`<span class="muted">–</span>`}</td>`}
+                ${hasRefs && html`<td class="ov-rep small">${r.reps.map((x, i) => html`${i ? ', ' : ''}<span class=${x.main ? '' : 'muted'} title=${x.main ? 'Hauptzug' : ''}>✓ ${x.name}</span>`)}</td>`}
+              </tr>`;
+            })}
+          </tbody>
+        </table>`
+      : !loadingDb && !loadingCloud && html`<p class="muted small">${token || cloudOn || hasRefs ? 'Zu dieser Stellung gibt es keine Angaben.' : 'Schalte die Cloud-Bewertung ein oder melde dich bei Lichess an, um hier Züge zu sehen.'}</p>`}
+    ${(loadingDb || loadingCloud) && html`<span class="muted small">lädt …</span>`}
+    ${!token && html`<p class="muted small">Partien aus der Lichess-Datenbank gibt es nur mit Lichess-Anmeldung.${' '}<button class="link" onClick=${() => startLogin(returnTo)}>Mit Lichess anmelden</button></p>`}
+    ${!cloudOn && html`<p class="muted small">Cloud-Bewertung ist aus. Beim Einschalten gehen die Stellung und deine IP-Adresse an chessdb.cn (Server in China).</p>`}
   </div>`;
 }
 

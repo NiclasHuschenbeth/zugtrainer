@@ -14,16 +14,17 @@ async function call(action, fen) {
  * -> { status: 'ok' | 'unknown' | 'checkmate' | 'stalemate' | 'invalid board', moves: [{ san, uci, cp, rank }] }
  * cp ist aus Sicht von Weiß (wie bei Stockfish im Editor), rank: 2 = bester Zug, 1 = gut, 0 = schwächer.
  */
-export async function cdbMoves(fen) {
+export function cdbMoves(fen) {
   if (cache.has(fen)) return cache.get(fen);
-  const data = await call('queryall', fen);
   const sign = fen.split(' ')[1] === 'w' ? 1 : -1;
-  const out = {
+  const p = call('queryall', fen).then(data => ({
     status: data.status,
     moves: (data.moves || []).map(m => ({ san: m.san, uci: m.uci, cp: sign * m.score, rank: m.rank })),
-  };
-  if (out.status === 'ok') cache.set(fen, out);
-  return out;
+  }));
+  // Nur gültige Antworten behalten ("unbekannt" kann sich nach einer Analyse-Anforderung ändern)
+  cache.set(fen, p);
+  p.then(out => out.status !== 'ok' && cache.delete(fen), () => cache.delete(fen));
+  return p;
 }
 
 /** Unbekannte Stellung zur Analyse einreihen. */

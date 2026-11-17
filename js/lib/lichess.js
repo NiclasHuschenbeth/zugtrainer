@@ -138,7 +138,8 @@ export async function explore(fen, presetKey, token) {
     q.set('speeds', 'blitz,rapid,classical');
     q.set('ratings', preset.ratings.join(','));
   }
-  const data = await (await explorerGet(`${preset.db}?${q}`, token)).json();
-  cache.set(key, data);
-  return data;
+  const p = explorerGet(`${preset.db}?${q}`, token).then(res => res.json());
+  cache.set(key, p);
+  p.catch(() => cache.delete(key));
+  return p;
 }

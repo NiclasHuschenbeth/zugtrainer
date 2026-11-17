@@ -696,3 +696,6 @@ div.start-opt { cursor: default; }
   .trainer { grid-template-columns: minmax(0, calc(100dvh - 24px)) minmax(0, 1fr); }
   main:has(> .trainer) { padding: 12px; }
 }
+
+/* Maia-Messseite */
+.maia-raw { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }

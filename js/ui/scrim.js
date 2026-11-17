@@ -2,7 +2,7 @@
 // Gegner: Lichess-Datenbank (echte Partien), Maia (Netz, das wie ein Mensch einer Spielstärke zieht) oder Stockfish.
 // Liefert die Datenbank keinen Zug mehr, spielt Maia weiter; ist Maia nicht ladbar (z. B. offline), Stockfish.
 // Verlässt die Partie die Vorbereitung, folgen ein paar freie Züge, dann bewertet Stockfish die Stellung.
-import { html, useEffect, useReducer, useRef } from 'preact';
+import { html, useEffect, useReducer, useRef, useState } from 'preact';
 import { de } from '../lib/repertoire.js';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeFen } from 'chessops/fen.js';
@@ -281,8 +281,23 @@ class Game {
   }
 }
 
+/** Liegt Maia schon im Gerätespeicher? (null = noch unbekannt) */
+let maiaCachedKnown = null;
+function useMaiaCached() {
+  const [v, setV] = useState(maiaCachedKnown);
+  useEffect(() => {
+    if (maiaCachedKnown !== null) return;
+    const url = new URL('../../vendor/maia/maia3-5m.fp16.onnx', import.meta.url).href;
+    (window.caches ? caches.match(url, { ignoreSearch: true }) : Promise.resolve(null))
+      .then(hit => setV((maiaCachedKnown = !!hit)))
+      .catch(() => setV(false));
+  }, []);
+  return v;
+}
+
 export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
   const [, force] = useReducer(x => x + 1, 0);
+  const maiaCached = useMaiaCached();
   const token = settings.lichessToken;
   const optsRef = useRef(null);
   // Ohne eigene Wahl: mit Lichess-Anmeldung die Datenbank, sonst Maia (zieht wie ein Mensch, braucht keine Anmeldung)
@@ -369,6 +384,7 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
           ${MAIA_LEVELS.map(l => html`<option value=${l}>ca. ${l} (Lichess-Wertung)</option>`)}
         </select>
       </label>`}
+      ${opp === 'maia' && maiaCached === false && !maiaReady && html`<p class="muted small">Maia wird beim ersten Gegnerzug geladen: einmalig ca. 22 MB, danach auch ohne Internet. Am Handy am besten im WLAN starten.</p>`}
       <div class="status">${status}</div>
       ${g && g.moves.length > 0 && html`<div class="tree">${de(g.moves.join(' '))}</div>`}
       <div class="row trainer-actions">

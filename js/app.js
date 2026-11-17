@@ -11,6 +11,7 @@ import { GamesView } from './ui/games.js';
 import { CompareView } from './ui/compare.js';
 import { Editor } from './ui/editor.js';
 import { Scrim } from './ui/scrim.js';
+import { MaiaTest } from './ui/maiatest.js';
 import { setBoardPrefs } from './ui/board.js';
 import { BoardSettings } from './ui/boardsettings.js';
 import { CONFIG } from './config.js';
@@ -42,7 +43,7 @@ window.addEventListener('beforeinstallprompt', e => {
 const viewToHash = v => {
   if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
   if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + v.chapter : ''}`;
-  if (v.name === 'games' || v.name === 'compare' || v.name === 'analyse') return `#/${v.name}`;
+  if (v.name === 'games' || v.name === 'compare' || v.name === 'analyse' || v.name === 'maia-test') return `#/${v.name}`;
   return '#/';
 };
 const hashToView = h => {
@@ -51,7 +52,7 @@ const hashToView = h => {
   if (n === 'train' && id && ['learn', 'review', 'keys'].includes(mode)) {
     return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? +ch : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
   }
-  if (n === 'games' || n === 'compare' || n === 'analyse') return { name: n };
+  if (n === 'games' || n === 'compare' || n === 'analyse' || n === 'maia-test') return { name: n };
   return { name: 'home' };
 };
 
@@ -503,6 +504,8 @@ function App() {
     />`;
   } else if (vname === 'edit' && rep) {
     body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} />`;
+  } else if (view.name === 'maia-test') {
+    body = html`<${MaiaTest} onExit=${() => go('home')} />`;
   } else if (view.name === 'analyse') {
     // Freies Analysebrett: der Editor auf einem Notizblock, der nur bis zum Neuladen der Seite bleibt (nichts wird gespeichert)
     body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} />`;
@@ -636,9 +639,12 @@ function App() {
       )}
     <main class=${view.name === 'edit' || view.name === 'analyse' ? 'wide' : ''}>${body}</main>
     <footer class="foot">
-      Brett und Schachlogik: <a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">chessground</a> und
-      <a href="https://github.com/niklasf/chessops" target="_blank" rel="noopener">chessops</a> aus dem Lichess-Projekt,
-      Engine: <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">Stockfish.js</a> (alle GPL-3.0).
+      Brett und Schachlogik:${' '}<a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">chessground</a>${' '}und${' '}
+      <a href="https://github.com/niklasf/chessops" target="_blank" rel="noopener">chessops</a>${' '}aus dem Lichess-Projekt,
+      Engine:${' '}<a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">Stockfish.js</a>${' '}(alle GPL-3.0).${' '}
+      Gegner „Maia“:${' '}<a href="https://github.com/CSSLab/maia3" target="_blank" rel="noopener">Maia-3</a>${' '}(University of Toronto,${' '}
+      <a href="vendor/maia/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a>), ausgeführt mit${' '}
+      <a href="https://github.com/microsoft/onnxruntime" target="_blank" rel="noopener">onnxruntime-web</a>${' '}(<a href="vendor/ort/LICENSE" target="_blank" rel="noopener">MIT</a>).${' '}
       ${cloudEnabled() ? 'Ohne Konto bleiben alle Daten lokal in deinem Browser.' : 'Alle Daten bleiben lokal in deinem Browser.'}
       <div class="foot-links">
         ${CONFIG.sourceUrl && html`<a href=${CONFIG.sourceUrl} target="_blank" rel="noopener">Quellcode (GPL-3.0)</a>`}

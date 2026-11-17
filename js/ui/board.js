@@ -2,7 +2,7 @@ import { html, useEffect, useReducer, useRef } from 'preact';
 import { Chessground } from 'chessground';
 
 /** Brett-Einstellungen, die für alle Bretter gelten (kommen aus den Einstellungen des Nutzers). */
-export const boardPrefs = { showDests: true, anim: true, input: 'both', coords: 'outside' };
+export const boardPrefs = { showDests: true, anim: true, input: 'both' };
 const listeners = new Set();
 export function setBoardPrefs(p) {
   Object.assign(boardPrefs, p);
@@ -10,7 +10,6 @@ export function setBoardPrefs(p) {
 }
 
 const prefConfig = () => ({
-  coordinates: boardPrefs.coords === 'inside',
   animation: { enabled: boardPrefs.anim, duration: 220 },
   movable: { showDests: boardPrefs.showDests },
   draggable: { enabled: boardPrefs.input !== 'click' },
@@ -37,7 +36,7 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
       orientation,
       fen,
       viewOnly: !onReady,
-      coordinates: pc.coordinates,
+      coordinates: false, // Koordinaten stehen immer außen am Rahmen (eigene Anzeige unten)
       animation: pc.animation,
       premovable: { enabled: false },
       highlight: { lastMove: true, check: true },
@@ -56,7 +55,6 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
     const refresh = () => {
       if (api.current) {
         api.current.set(prefConfig());
-        api.current.redrawAll(); // nötig, damit die Koordinaten auf den Feldern erscheinen oder verschwinden
       }
       redraw();
     };
@@ -74,13 +72,12 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
     api.current.setAutoShapes(shapes || []);
   }, [fen, orientation, shapes, lastMove]);
 
-  const inside = boardPrefs.coords === 'inside';
   const white = orientation === 'white';
   const files = (white ? 'abcdefgh' : 'hgfedcba').split('');
   const ranks = (white ? '87654321' : '12345678').split('');
-  return html`<div class="board-wrap"><div class=${`board-frame ${inside ? 'inside' : ''}`}>
+  return html`<div class="board-wrap"><div class="board-frame">
     <div class="board" ref=${el}></div>
-    ${!inside && html`<div class="coord-ranks" aria-hidden="true">${ranks.map(r => html`<span>${r}</span>`)}</div>`}
-    ${!inside && html`<div class="coord-files" aria-hidden="true">${files.map(f => html`<span>${f}</span>`)}</div>`}
+    <div class="coord-ranks" aria-hidden="true">${ranks.map(r => html`<span>${r}</span>`)}</div>
+    <div class="coord-files" aria-hidden="true">${files.map(f => html`<span>${f}</span>`)}</div>
   </div></div>`;
 }

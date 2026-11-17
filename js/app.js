@@ -76,8 +76,8 @@ function App() {
     if (!st) return;
     document.documentElement.dataset.board = st.boardTheme || 'modern';
     document.documentElement.dataset.bsize = String(st.boardSize || 3);
-    setBoardPrefs({ showDests: st.showDests !== false, anim: st.anim !== false, input: st.moveInput || 'both', coords: st.coords || 'outside' });
-  }, [st && st.boardTheme, st && st.boardSize, st && st.showDests, st && st.anim, st && st.moveInput, st && st.coords]);
+    setBoardPrefs({ showDests: st.showDests !== false, anim: st.anim !== false, input: st.moveInput || 'both' });
+  }, [st && st.boardTheme, st && st.boardSize, st && st.showDests, st && st.anim, st && st.moveInput]);
   const syncing = useRef(false);
   const again = useRef(false);
   const timer = useRef(null);

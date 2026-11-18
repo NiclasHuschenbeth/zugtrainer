@@ -36,15 +36,19 @@ function drillKeys(rep, list, follow = 0) {
 
 const COLOR = { white: 'Weiß', black: 'Schwarz' };
 
-export function CompareView({ db, go, train, setSettings, update, openRep }) {
+export function CompareView({ db, go, train, setSettings, update, openRep, fixedRep }) {
   const s = db.settings;
-  // Pro Farbe ein aktives Repertoire (gespeicherte Wahl, sonst das erste dieser Farbe)
+  // Pro Farbe ein aktives Repertoire (gespeicherte Wahl, sonst das erste dieser Farbe).
+  // fixedRep: das Repertoire ist außen gewählt (Seite „Lücken finden“), dann ohne eigene Auswahl.
   const active = color => {
+    if (fixedRep) return fixedRep.color === color ? fixedRep : null;
     const mine = db.repertoires.filter(r => r.color === color);
-    return mine.find(r => r.id === s.compare[color]) || mine[0] || null;
+    return mine.find(r => r.id === (s.compare || {})[color]) || mine[0] || null;
   };
   const reps = { white: active('white'), black: active('black') };
-  const [side, setSide] = useState(reps.white || !reps.black ? 'white' : 'black');
+  const [sideState, setSide] = useState(reps.white || !reps.black ? 'white' : 'black');
+  const side = fixedRep ? fixedRep.color : sideState;
+  const title = fixedRep ? null : html`<h1>Meine Partien auswerten</h1>`;
   const stats = color => html`<${StatsView} games=${db.games} color=${color} db=${db} setSettings=${setSettings} openRep=${openRep} />`;
   const [tab, setTab] = useState('you');
   const [sel, setSel] = useState(null);
@@ -52,13 +56,13 @@ export function CompareView({ db, go, train, setSettings, update, openRep }) {
   const data = useMemo(() => (rep ? compare(rep, db.games) : null), [rep, db.games]);
   const gamesAs = color => db.games.filter(g => g.userColor === color).length;
   const choose = (color, id) => {
-    setSettings({ compare: { ...s.compare, [color]: id } });
+    setSettings({ compare: { ...(s.compare || {}), [color]: id } });
     setSel(null);
   };
 
   if (!db.games.length) {
     return html`<div class="stack">
-      <h1>Meine Partien auswerten</h1>
+      ${title}
       <p class="muted">Schritt 1: Lade deine Partien. Danach siehst du hier sofort, in welchen Eröffnungen es gut oder schlecht läuft${db.repertoires.length ? ', wo du von deinem Repertoire abgewichen bist und welche Gegnerzüge dir noch fehlen' : ''}.</p>
       <${GamesView} db=${db} update=${update} embedded=${true} />
     </div>`;
@@ -66,7 +70,7 @@ export function CompareView({ db, go, train, setSettings, update, openRep }) {
   // Ohne Repertoire: nur die Eröffnungsstatistik (der Abgleich mit dem Repertoire kommt dazu, sobald eines da ist)
   if (!db.repertoires.length) {
     return html`<div class="stack">
-      <h1>Meine Partien auswerten</h1>
+      ${title}
       <p class="muted">So schneidest du in deinen Eröffnungen ab. Mit einem eigenen Repertoire siehst du hier zusätzlich, wo du davon abgewichen bist. <button class="link" onClick=${() => go('home')}>Repertoire hochladen</button></p>
       <div class="tabs">
         ${['white', 'black'].map(c => html`<button class=${side === c ? 'on' : ''} onClick=${() => setSide(c)}>Mit ${COLOR[c]} (${gamesAs(c)})</button>`)}
@@ -91,10 +95,12 @@ export function CompareView({ db, go, train, setSettings, update, openRep }) {
     </label>`;
   };
 
-  const head = html`<h1>Meine Partien auswerten</h1>
-    <p class="muted">Wo bist du in deinen Partien von deinem Repertoire abgewichen, und welche Gegnerzüge fehlen dir noch?</p>
-    <p class="muted">Lege fest, welches Repertoire für deine Weiß- und welches für deine Schwarzpartien gilt. Klicke eine Farbe an, um deren Auswertung zu sehen.</p>
-    <div class="grid2">${picker('white')}${picker('black')}</div>
+  const head = html`${title}
+    ${fixedRep
+      ? html`<p class="muted">Wo bist du in deinen ${COLOR[side]}-Partien von „${fixedRep.name}“ abgewichen, und welche Gegnerzüge fehlen dir noch? (${gamesAs(side)} Partien mit ${COLOR[side]})</p>`
+      : html`<p class="muted">Wo bist du in deinen Partien von deinem Repertoire abgewichen, und welche Gegnerzüge fehlen dir noch?</p>
+        <p class="muted">Lege fest, welches Repertoire für deine Weiß- und welches für deine Schwarzpartien gilt. Klicke eine Farbe an, um deren Auswertung zu sehen.</p>
+        <div class="grid2">${picker('white')}${picker('black')}</div>`}
     <details class="card load-games">
       <summary>${db.games.length} Partien geladen – weitere laden oder aktualisieren</summary>
       <${GamesView} db=${db} update=${update} embedded=${true} />

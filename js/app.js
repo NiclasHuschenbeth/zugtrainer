@@ -6,10 +6,10 @@ import { positionVisits } from './lib/analysis.js';
 import { finishLogin } from './lib/lichess.js';
 import { RepertoireView, RepertoiresView } from './ui/repertoires.js';
 import { CourseChoice, defaultPick } from './ui/coursechoice.js';
+import { GapsView } from './ui/gaps.js';
+import { Menu, MenuItem } from './ui/menu.js';
 import { Trainer } from './ui/trainer.js';
 import { KeyTrainer } from './ui/keypos.js';
-import { GamesView } from './ui/games.js';
-import { CompareView } from './ui/compare.js';
 import { Editor } from './ui/editor.js';
 import { Scrim } from './ui/scrim.js';
 import { MaiaTest } from './ui/maiatest.js';
@@ -44,7 +44,8 @@ window.addEventListener('beforeinstallprompt', e => {
 const viewToHash = v => {
   if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
   if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + [].concat(v.chapter).join(',') : ''}`;
-  if (v.name === 'games' || v.name === 'compare' || v.name === 'analyse' || v.name === 'maia-test') return `#/${v.name}`;
+  if (v.name === 'gaps' || v.name === 'games' || v.name === 'compare') return '#/luecken';
+  if (v.name === 'analyse' || v.name === 'maia-test') return `#/${v.name}`;
   return '#/';
 };
 const hashToView = h => {
@@ -53,7 +54,8 @@ const hashToView = h => {
   if (n === 'train' && id && ['learn', 'review', 'keys'].includes(mode)) {
     return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? (ch.includes(',') ? ch.split(',').map(Number) : +ch) : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
   }
-  if (n === 'games' || n === 'compare' || n === 'analyse' || n === 'maia-test') return { name: n };
+  if (n === 'luecken' || n === 'games' || n === 'compare') return { name: 'gaps' };
+  if (n === 'analyse' || n === 'maia-test') return { name: n };
   return { name: 'home' };
 };
 
@@ -543,8 +545,25 @@ function App() {
     ? { ...db, repertoires: db.repertoires.map(r => (lockOf(r) ? { ...r, chapters: [], keySolutions: undefined, videos: undefined, lock: lockOf(r) } : r)) }
     : db;
   const rep = view.repId ? vdb.repertoires.find(r => r.id === view.repId) : null;
+  if (rep && !rep.lock) {
+    try {
+      localStorage.setItem('zt-last-rep', rep.id);
+    } catch {
+      // ohne Speicher: dann eben das erste Repertoire
+    }
+  }
   // Repertoires als Referenz im Analyse-Brett/Editor (gesperrte Kurse haben keine Züge)
   const refReps = vdb.repertoires.filter(r => !r.lock && !r.locked && r.chapters && r.chapters.length);
+  /** Zuletzt geöffnetes Repertoire (für Testpartie und Lücken finden aus dem Werkzeuge-Menü). */
+  const lastRep = () => {
+    let id = null;
+    try {
+      id = localStorage.getItem('zt-last-rep');
+    } catch {
+      // kein Speicher
+    }
+    return refReps.some(r => r.id === id) ? id : refReps[0] ? refReps[0].id : null;
+  };
   // Lernen, Editor und Testpartie gibt es für gesperrte Kurse nicht: stattdessen die Kursseite mit dem Hinweis
   const vname = rep && rep.lock && ['train', 'edit', 'scrim'].includes(view.name) ? 'rep' : view.name;
   let body;
@@ -599,6 +618,8 @@ function App() {
     body = html`<${Scrim}
       key=${rep.id}
       rep=${rep}
+      reps=${refReps}
+      onSwitch=${id => setView({ ...view, repId: id })}
       settings=${db.settings}
       setSettings=${setSettings}
       onGrade=${grade(rep.id, 'review')}
@@ -627,10 +648,9 @@ function App() {
       back=${() => go('home')}
       openLogin=${cloudEnabled() ? () => setShowAccount(true) : null}
     />`;
-  } else if (view.name === 'games') {
-    body = html`<${GamesView} db=${db} update=${update} />`;
-  } else if (view.name === 'compare') {
-    body = html`<${CompareView} db=${vdb} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${id => setView({ name: 'rep', repId: id })} />`;
+  } else if (view.name === 'gaps' || view.name === 'games' || view.name === 'compare') {
+    body = html`<${GapsView} db=${vdb} defaultRepId=${lastRep()} go=${go} train=${train} setSettings=${setSettings} update=${update}
+      openRep=${id => setView({ name: 'rep', repId: id })} editAt=${(id, at) => setView({ name: 'edit', repId: id, at, backTo: { name: 'gaps' } })} />`;
   } else {
     body = html`<${RepertoiresView}
       db=${vdb}
@@ -652,8 +672,13 @@ function App() {
     />`;
   }
 
-  const isHome = ['home', 'rep', 'train', 'edit', 'scrim'].includes(view.name);
-  const inTools = view.name === 'games' || view.name === 'compare';
+  const isHome = ['home', 'rep', 'train', 'edit'].includes(view.name);
+  const inTools = ['gaps', 'games', 'compare', 'scrim'].includes(view.name);
+  const openScrim = () => {
+    const id = lastRep();
+    if (id) setView({ name: 'scrim', repId: id, backTo: { name: 'home' } });
+    else go('home');
+  };
 
   // Beim Lernen und in der Testpartie bleibt auf kleinen Bildschirmen nur eine schmale Kopfzeile (mehr Platz fürs Brett)
   const slim = ['train', 'scrim', 'edit', 'analyse'].includes(view.name);
@@ -681,8 +706,11 @@ function App() {
       <div class="brand" onClick=${() => go('home')} title="Modern Chess Trainer"><img src="icons/logo-wordmark-trainer.png" alt="Modern Chess Trainer" /></div>
       <nav>
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
-        <button class=${inTools ? 'on' : ''} onClick=${() => go('compare')} title="Partien von Lichess und Chess.com laden: Eröffnungsstatistik und Abgleich mit dem Repertoire">Meine Partien</button>
         <button class=${view.name === 'analyse' ? 'on' : ''} onClick=${() => go('analyse')} title="Freies Brett mit Stockfish, Cloud-Bewertung und Eröffnungsdatenbank">Analyse</button>
+        <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
+          <${MenuItem} title="Testpartie" hint="Ein Repertoire gegen echte Gegnerzüge, Maia oder Stockfish spielen" onClick=${openScrim} />
+          <${MenuItem} title="Lücken finden" hint="Wo fehlt deinem Repertoire etwas? Aus deinen Partien und aus der Datenbank" onClick=${() => go('gaps')} />
+        <//>
       </nav>
       <div class="top-right">
         <button class="acct gear" onClick=${() => setShowBoard(true)} title="Brett-Einstellungen: Farben, Größe, Zugeingabe" aria-label="Brett-Einstellungen">⚙ Brett</button>

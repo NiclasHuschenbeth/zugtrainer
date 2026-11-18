@@ -352,7 +352,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
             ${rep.chapters.length} Kapitel · ${s.lines} Linien · ${s.total} Züge
           </div>
         </div>
-        <${Menu} label="Werkzeuge" className="btn" align="right">
+        <${Menu} label="Mehr" className="btn" align="right">
           <${MenuItem} title="Repertoire bearbeiten" hint="Züge, Varianten und Kommentare im Editor ändern" onClick=${() => edit(rep.id)} />
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
           <${MenuDivider} />

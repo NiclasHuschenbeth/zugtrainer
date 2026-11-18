@@ -293,7 +293,7 @@ function useMaiaCached() {
   return v;
 }
 
-export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
+export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade, onExit, onEdit }) {
   const [, force] = useReducer(x => x + 1, 0);
   const maiaCached = useMaiaCached();
   const token = settings.lichessToken;
@@ -357,7 +357,13 @@ export function Scrim({ rep, settings, setSettings, onGrade, onExit, onEdit }) {
       <div class="trainer-head">
         <div>
           <div class="eyebrow">Testpartie</div>
-          <h2>${rep.name}</h2>
+          ${reps.length > 1 && onSwitch
+            ? html`<select class="scrim-rep" aria-label="Repertoire für die Testpartie" value=${rep.id} onChange=${e => onSwitch(e.target.value)}>
+                ${['white', 'black'].map(c => reps.some(r => r.color === c) && html`<optgroup label=${c === 'white' ? 'Mit Weiß' : 'Mit Schwarz'}>
+                  ${reps.filter(r => r.color === c).map(r => html`<option value=${r.id}>${r.name}</option>`)}
+                </optgroup>`)}
+              </select>`
+            : html`<h2>${rep.name}</h2>`}
         </div>
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>

@@ -51,7 +51,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * "Anteil" = Anteil aller Partien, in denen die Stellung bzw. der Zug aufs Brett kommt.
  * -> { gaps: [{ type: 'missing' | 'end' | 'answer', san, inc, share, ci, path, fen }], checked, truncated, error }
  */
-export async function scanCoverage(rep, { preset, token, min, maxRequests = 150, onProgress, signal }) {
+export async function scanCoverage(rep, { preset, token, min, maxRequests = 150, onProgress, onWait, signal }) {
   const g = graph(rep);
   const reach = new Map();
   for (const ch of rep.chapters) reach.set(epdOf(ch.startFen), 1);
@@ -86,12 +86,25 @@ export async function scanCoverage(rep, { preset, token, min, maxRequests = 150,
     }
     let data;
     const t0 = performance.now();
-    try {
-      data = await explore(e.fen, preset, token);
-    } catch (err) {
-      error = err instanceof TypeError ? 'Keine Verbindung zur Lichess-Datenbank.' : err.message;
-      break;
+    // Lichess bremst nach vielen Anfragen (Fehler 429): eine Minute warten und dieselbe Stellung erneut fragen (höchstens 3×)
+    for (let attempt = 0; ; attempt++) {
+      try {
+        data = await explore(e.fen, preset, token);
+        break;
+      } catch (err) {
+        if (err.rate && attempt < 3 && !signal.aborted) {
+          for (let s = 60; s > 0 && !signal.aborted; s--) {
+            onWait && onWait(s);
+            await sleep(1000);
+          }
+          onWait && onWait(0);
+          continue;
+        }
+        error = err instanceof TypeError ? 'Keine Verbindung zur Lichess-Datenbank.' : err.message;
+        break;
+      }
     }
+    if (!data) break;
     checked++;
     onProgress && onProgress(checked);
     if (performance.now() - t0 > 20) await sleep(200); // nicht aus dem Cache: Lichess schonen

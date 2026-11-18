@@ -389,6 +389,9 @@ label.check.small { font-size: .85rem; }
 .tile.warn b { color: var(--warn); }
 .tile.ok b { color: var(--ok); }
 .tiles .tile { cursor: default; }
+.progress.busy > div { width: 30%; animation: busy-bar 1.4s ease-in-out infinite; }
+@keyframes busy-bar { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+.cover-opts { margin: .2rem 0; }
 .tiles .tile:hover { border-color: var(--line); box-shadow: none; }
 .stat-moves { display: block; font-size: .78rem; color: var(--muted); font-weight: 400; }
 .stat-row .caret { color: var(--muted); }

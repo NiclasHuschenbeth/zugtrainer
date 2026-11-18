@@ -103,7 +103,7 @@ const EXPLORER = 'https://explorer.lichess.ovh';
 async function explorerGet(path, token) {
   const res = await fetch(`${EXPLORER}/${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (res.status === 401) throw Object.assign(new Error('Anmeldung bei Lichess nötig.'), { auth: true });
-  if (res.status === 429) throw new Error('Zu viele Anfragen – bitte kurz warten.');
+  if (res.status === 429) throw Object.assign(new Error('Zu viele Anfragen – bitte kurz warten.'), { rate: true });
   if (!res.ok) throw new Error(`Lichess-Datenbank antwortet mit Fehler ${res.status}.`);
   return res;
 }

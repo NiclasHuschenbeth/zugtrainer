@@ -883,7 +883,7 @@ const pct = x => (x >= 0.1 ? Math.round(x * 100) : (x * 100).toFixed(1).replace(
 /** Abdeckung: häufige Gegnerzüge, die im Repertoire fehlen. */
 const coverCache = new Map(); // Repertoire -> letztes Ergebnis (bis zum Neuladen der Seite)
 
-/** Abdeckung prüfen: Welche häufigen Gegnerzüge fehlen im Repertoire? Steht auf der Repertoire-Seite. */
+/** Fehlende Gegnerzüge finden: Welche häufigen Gegnerzüge fehlen im Repertoire? (Seite „Lücken finden“, Reiter „Aus der Datenbank“) */
 export function CoveragePanel({ rep, settings, setSettings, onJump }) {
   const [run, setRun] = useState(null); // { checked } während der Prüfung
   const [res, setResState] = useState(() => coverCache.get(rep.id) || null);
@@ -895,19 +895,22 @@ export function CoveragePanel({ rep, settings, setSettings, onJump }) {
   const abort = useRef(null);
   useEffect(() => () => abort.current && abort.current.abort(), []);
   const token = settings.lichessToken;
-  const preset = PRESETS[settings.explorer] || PRESETS.all;
+  // Eigene Spielstärke für diese Prüfung (nicht die Einstellung des Analyse-Bretts); vorgewählt: alle Spielstärken
+  const presetKey = PRESETS[settings.coverDb] ? settings.coverDb : 'all';
+  const min = settings.coverMin || 0.01;
 
   const start = async () => {
     const ctl = new AbortController();
     abort.current = ctl;
     setRes(null);
-    setRun({ checked: 0 });
+    setRun({ checked: 0, wait: 0 });
     const r = await scanCoverage(rep, {
-      preset: settings.explorer,
+      preset: presetKey,
       token,
-      min: settings.coverMin,
+      min,
       signal: ctl.signal,
-      onProgress: checked => setRun({ checked }),
+      onProgress: checked => setRun(s => ({ ...s, checked, wait: 0 })),
+      onWait: wait => setRun(s => ({ ...(s || { checked: 0 }), wait })),
     });
     setRes(ctl.signal.aborted && !r.gaps.length ? null : r);
     setRun(null);
@@ -926,19 +929,33 @@ export function CoveragePanel({ rep, settings, setSettings, onJump }) {
   const ends = res ? res.gaps.filter(g => g.type === 'end') : [];
 
   return html`<div class="card" id="coverage-panel">
-    <div class="row between">
-      <h2 class="flat">Abdeckung prüfen</h2>
-      <select class="auto" value=${settings.coverMin} onChange=${e => setSettings({ coverMin: +e.target.value })} title="Ab welchem Anteil an allen Partien ein fehlender Zug gemeldet wird">
-        ${[0.05, 0.02, 0.01, 0.005].map(v => html`<option value=${v}>ab ${pct(v)} der Partien</option>`)}
-      </select>
+    <h2 class="flat">Fehlende Gegnerzüge finden</h2>
+    <p class="muted small">Geht dein Repertoire vom ersten Zug an durch und fragt die Lichess-Datenbank, was Gegner in deinen Stellungen spielen. Gemeldet werden Züge, die oft genug vorkommen, aber in deinem Repertoire fehlen. Seltene Stellungen werden gar nicht erst geprüft, deshalb sind es meist nur einige Dutzend Stellungen.</p>
+    <div class="grid2 cover-opts">
+      <label class="small">Spielstärke der Gegner
+        <select value=${presetKey} disabled=${!!run} onChange=${e => setSettings({ coverDb: e.target.value })}>
+          ${Object.entries(PRESETS).map(([k, p]) => html`<option value=${k}>${p.label.replace(/^Lichess – /, '')}</option>`)}
+        </select>
+      </label>
+      <label class="small">Melden, wenn der Zug vorkommt in mindestens
+        <select value=${min} disabled=${!!run} onChange=${e => setSettings({ coverMin: +e.target.value })}>
+          ${[[0.05, 20, '5 %'], [0.02, 50, '2 %'], [0.01, 100, '1 %'], [0.005, 200, '0,5 %']].map(([v, k, t]) => html`<option value=${v}>1 von ${k} Partien (${t})</option>`)}
+        </select>
+      </label>
     </div>
-    <p class="muted small">Prüft mit der Eröffnungsdatenbank (${preset.label}), welche häufigen Gegnerzüge im Repertoire fehlen. Die Prozentzahl sagt, in wie vielen deiner Partien der Zug aufs Brett kommt.</p>
+    <p class="muted small">Je seltener die Schwelle, desto gründlicher, aber desto länger dauert die Prüfung. 1 von 100 ist für ein ernsthaftes Repertoire eine gute Grenze.</p>
     ${!token
       ? html`<div class="muted small">Dafür ist die Lichess-Anmeldung nötig. Lichess gibt seine Partiendatenbank nur für angemeldete Nutzer frei.</div>
           <div class="row"><button class="btn primary" onClick=${() => startLogin({ name: 'rep', repId: rep.id })}>Mit Lichess anmelden</button></div>`
       : run
-        ? html`<div class="row"><span class="muted small">${run.checked} Stellungen geprüft …</span><button class="btn small" onClick=${() => abort.current.abort()}>Abbrechen</button></div>`
-        : html`<button class="btn primary" onClick=${start}>${res ? 'Erneut prüfen' : 'Abdeckung prüfen'}</button>`}
+        ? html`<div class="stack tight">
+            <div class="progress busy"><div></div></div>
+            <div class="row between">
+              <span class="muted small">${run.wait ? `Lichess bremst kurz, es geht in ${run.wait} s weiter … (${run.checked} Stellungen geprüft)` : `${run.checked} Stellungen geprüft …`}</span>
+              <button class="btn small" onClick=${() => abort.current.abort()}>Abbrechen</button>
+            </div>
+          </div>`
+        : html`<button class="btn primary" onClick=${start}>${res ? 'Erneut prüfen' : 'Fehlende Gegnerzüge finden'}</button>`}
     ${res && html`
       ${res.error && html`<div class="msg bad">${res.error}</div>`}
       ${res.truncated && html`<div class="muted small">Nach ${res.checked} Stellungen gestoppt – die wichtigsten Lücken stehen unten.</div>`}

@@ -2,6 +2,7 @@
 import { outcomeFor } from './games.js';
 import { OPENINGS_DE, SETUP_MOVES } from './openings-de.js';
 import { de } from './repertoire.js';
+import { variationDe } from './variations-de.js';
 
 let table = null;
 const famMoves = new Map(); // deutscher Familienname -> { moves, exact }
@@ -156,8 +157,10 @@ export function openingStats(games, map) {
     let e = fam.get(f);
     if (!e) fam.set(f, (e = { name: f, n: 0, w: 0, d: 0, l: 0, vars: new Map() }));
     add(e, g);
-    let v = e.vars.get(op.name);
-    if (!v) e.vars.set(op.name, (v = { name: op.name, n: 0, w: 0, d: 0, l: 0 }));
+    // Untervarianten auf Deutsch; gleich lautende (z. B. angenommen/abgelehnt) zusammen
+    const label = variationDe(variationOf(op.name)) || '';
+    let v = e.vars.get(label);
+    if (!v) e.vars.set(label, (v = { name: op.name, label, n: 0, w: 0, d: 0, l: 0 }));
     add(v, g);
   }
   const list = [...fam.values()].map(e => ({

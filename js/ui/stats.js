@@ -56,9 +56,9 @@ export function StatsView({ games, color, db, setSettings, openRep }) {
       <div class="stat-list">
         ${st.list.map(e => {
           // Aufklappen nur, wenn es wirklich Untervarianten gibt
-          const subs = e.vars.some(v => variationOf(v.name));
+          const subs = e.vars.some(v => v.label);
           return html`<${Row} e=${e} label=${germanName(e.name)} moves=${openingMoves(e.name)} open=${openName === e.name} onClick=${subs ? () => setOpenName(openName === e.name ? null : e.name) : null} />
-            ${subs && openName === e.name && e.vars.map(v => html`<${Row} sub=${true} e=${v} label=${variationOf(v.name) || 'ohne genauere Variante'} />`)}`;
+            ${subs && openName === e.name && e.vars.map(v => html`<${Row} sub=${true} e=${v} label=${v.label || 'ohne genauere Variante'} />`)}`;
         })}
       </div>
     </div>

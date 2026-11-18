@@ -597,6 +597,12 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .course-choice .cc-item { min-height: 36px; align-items: center; }
 .opp-choice { display: flex; flex-direction: column; gap: .3rem; margin: .2rem 0 .3rem; }
 .opp-choice .check { align-items: flex-start; }
+.opp-choice .opp-row { display: flex; align-items: center; gap: .4rem; }
+.info-btn { flex: none; width: 1.3rem; height: 1.3rem; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--primary); font: italic 700 .75rem/1 Georgia, serif; cursor: pointer; padding: 0; }
+.info-btn.on, .info-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.opp-info { margin: 0 0 .3rem 1.6rem; font-size: .85rem; line-height: 1.4; }
+.scrim-rep { margin-top: .2rem; }
+.scrim-rep select { width: 100%; }
 .ov-table th { font-size: .78rem; font-weight: 600; color: var(--muted); text-align: left; padding-bottom: .2rem; }
 .ov-table th.right { text-align: right; }
 .ov-table .ov-rep { max-width: 11rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

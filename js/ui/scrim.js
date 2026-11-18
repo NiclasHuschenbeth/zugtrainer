@@ -21,10 +21,29 @@ const FREE_MOVES = 3;
 const PRESET_ELO = { low: 1200, mid: 1600, high: 2000, top: 2400, masters: 2400 };
 let maiaReady = false;
 const DEPTH = 14;
+// Bewertung der Stellung nach der Vorbereitung, aus eigener Sicht (in Bauerneinheiten):
+// bis 0,25 ausgeglichen, 0,25–0,75 etwas besser, 0,75–1,5 klar besser, darüber auf Gewinn (wie die Informator-Zeichen = ⩲ ± +−)
 const VERDICT = {
-  won: { label: 'Gewonnen', cls: 'ok' },
-  held: { label: 'Gehalten', cls: 'ask' },
-  lost: { label: 'Verloren', cls: 'bad' },
+  win: { label: 'Du stehst auf Gewinn', cls: 'ok' },
+  clear: { label: 'Du stehst klar besser', cls: 'ok' },
+  better: { label: 'Du stehst etwas besser', cls: 'ok' },
+  equal: { label: 'Ausgeglichen', cls: 'ask' },
+  worse: { label: 'Du stehst etwas schlechter', cls: 'ask' },
+  clearWorse: { label: 'Du stehst klar schlechter', cls: 'bad' },
+  lost: { label: 'Du stehst auf Verlust', cls: 'bad' },
+};
+const verdictOf = cp =>
+  cp > 150 ? 'win' : cp > 75 ? 'clear' : cp > 25 ? 'better' : cp >= -25 ? 'equal' : cp >= -75 ? 'worse' : cp >= -150 ? 'clearWorse' : 'lost';
+const GAP_SHARE = 0.05; // ab diesem Anteil der Partien gilt ein fehlender Gegnerzug als mögliche Lücke
+const OPP_INFO = {
+  db: 'Zieht wie Spieler dieser Spielstärke auf Lichess. Jeder Zug wird nach Häufigkeit ausgelost: Ein Zug aus 40 % der Partien kommt in etwa 40 % der Fälle, ein seltener Zug nur ab und zu. So triffst du auch auf Nebenvarianten. Kennt die Datenbank keine Partien mehr, spielt Maia weiter. Braucht eine Lichess-Anmeldung.',
+  maia: 'Ein Computer, der wie ein Mensch der gewählten Spielstärke zieht, mit typischen menschlichen Zügen und Fehlern. Läuft ohne Anmeldung direkt auf deinem Gerät.',
+  sf: 'Die stärkste Schach-Engine. Spielt immer den Zug, den sie für den besten hält. Gut, um zu prüfen, ob deine Vorbereitung auch gegen die beste Antwort hält.',
+};
+const OPP_TEXT = {
+  db: 'Du spielst dein Repertoire gegen Züge, die Lichess-Spieler in der Stellung wählen.',
+  maia: 'Du spielst dein Repertoire gegen Maia, die wie ein Mensch zieht.',
+  sf: 'Du spielst dein Repertoire gegen Stockfish.',
 };
 
 /** Stockfish für einzelne Abfragen: eval(fen) -> beste Variante (Bewertung aus Sicht von Weiß). */
@@ -64,7 +83,7 @@ class Game {
     this.onGrade = onGrade;
     this.index = derived(rep).index;
     this.judge = makeJudge();
-    this.tally = { won: 0, held: 0, lost: 0 };
+    this.tally = { games: 0, clean: 0, gaps: 0 };
     this.cg = null;
     this.run = 0;
     this.start();
@@ -82,10 +101,20 @@ class Game {
     this.left = null; // wo die Vorbereitung endete
     this.result = null;
     this.arrow = null;
+    this.retry = null; // falscher Zug in der Vorbereitung: { right } (nochmal probieren)
+    this.mistakes = 0;
     this.thinking = false;
     this.loadingMaia = false;
     this.sync();
     this.step();
+  }
+
+  /** Nach einem falschen Zug: den Repertoirezug zeigen. */
+  showSolution() {
+    if (!this.retry) return;
+    this.arrow = this.retry.arrow;
+    this.retry.shown = true;
+    this.sync();
   }
 
   mine() {
@@ -172,7 +201,7 @@ class Game {
         let x = Math.random() * list.reduce((s, m) => s + m.n, 0);
         const m = list.find(m => (x -= m.n) < 0) || list[0];
         const move = parseSan(posFromFen(fen), m.san);
-        if (move) pick = { move, share: m.n / total };
+        if (move) pick = { move, share: m.n / total, db: true };
       }
     } catch (err) {
       // Lichess-Anmeldung abgelaufen: abmelden und mit Maia weiterspielen (siehe unten)
@@ -186,7 +215,8 @@ class Game {
       const lines = (await this.judge.eval(fen)) || [];
       const sign = turnOf(fen) === 'white' ? 1 : -1;
       const val = l => sign * (l.mate != null ? Math.sign(l.mate) * 100000 : l.cp);
-      const good = lines.filter(l => val(l) >= val(lines[0]) - 30);
+      // Stockfish gewählt: immer der beste Zug. Nur als Ersatz für Maia (offline) etwas Abwechslung.
+      const good = preset === 'sf' ? lines.slice(0, 1) : lines.filter(l => val(l) >= val(lines[0]) - 30);
       const line = good[Math.floor(Math.random() * good.length)];
       const move = line && parseUci(line.pv[0]);
       if (move && posFromFen(fen).isLegal(move)) pick = { move, share: null };
@@ -200,7 +230,13 @@ class Game {
     const san = this.apply(pick.move);
     if (this.phase === 'prep') {
       if (!known) this.leave({ type: 'end', fen });
-      else if (!known.has(san)) this.leave({ type: 'gap', fen, san: `${moveLabel(fen)}${san}`, share: pick.share });
+      else if (!known.has(san)) {
+        // Häufigkeit gibt es nur bei Zügen aus der Datenbank (bei Maia ist share die Netz-Wahrscheinlichkeit)
+        const share = pick.db ? pick.share : null;
+        const type = share == null ? 'novel' : share >= GAP_SHARE ? 'gap' : 'rare';
+        if (type === 'gap') this.tally.gaps++;
+        this.leave({ type, fen, san: `${moveLabel(fen)}${san}`, share });
+      }
     }
     this.step();
   }
@@ -222,12 +258,17 @@ class Game {
         const san = makeSanAndPlay(pos.clone(), move);
         if (!known.has(san)) {
           const [right, keys] = known.entries().next().value;
-          this.onGrade(`${epdOf(fen)}|${right}`, false);
-          this.arrow = { orig: keys.from, dest: keys.to, brush: 'green' };
-          this.left = { type: 'forgot', fen, played: `${moveLabel(fen)}${san}`, right: `${moveLabel(fen)}${right}` };
+          // Für die Wiederholung zählt es als Fehler (einmal pro Stellung); der Zug wird nicht ausgeführt
+          if (!this.retry || this.retry.fen !== fen) {
+            this.onGrade(`${epdOf(fen)}|${right}`, false);
+            this.mistakes++;
+          }
+          this.retry = { fen, played: `${moveLabel(fen)}${san}`, right: `${moveLabel(fen)}${right}`, arrow: { orig: keys.from, dest: keys.to, brush: 'green' }, shown: !!(this.retry && this.retry.fen === fen && this.retry.shown) };
           if (this.opts().sound) sounds.bad();
-          return this.end('lost', null);
+          return this.sync();
         }
+        this.retry = null;
+        this.arrow = null;
         if (this.opts().sound) sounds.ok();
       }
     }
@@ -262,14 +303,15 @@ class Game {
         text = formatScore(line);
       }
     }
-    this.end(score >= -50 ? 'won' : score >= -150 ? 'held' : 'lost', text);
+    this.end(verdictOf(score), text);
   }
 
   end(verdict, evalText) {
     this.phase = 'done';
     this.result = { verdict, evalText };
-    this.tally[verdict]++;
-    if (verdict !== 'lost' && this.opts().sound) sounds.done();
+    this.tally.games++;
+    if (!this.mistakes) this.tally.clean++;
+    if (VERDICT[verdict].cls !== 'bad' && this.opts().sound) sounds.done();
     this.sync();
   }
 
@@ -296,6 +338,7 @@ function useMaiaCached() {
 export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade, onExit, onEdit }) {
   const [, force] = useReducer(x => x + 1, 0);
   const maiaCached = useMaiaCached();
+  const [info, setInfo] = useState(null); // aufgeklappte Erklärung zu einem Gegner
   const token = settings.lichessToken;
   const optsRef = useRef(null);
   // Gegner: 'db' (echte Partien aus der Lichess-Datenbank), 'maia' oder 'sf'.
@@ -337,13 +380,19 @@ export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade
   else if (g.phase === 'judging') status = html`<div class="msg info">Stockfish bewertet die Stellung …</div>`;
   else if (g.phase === 'done') {
     const v = VERDICT[r.verdict];
+    const pct = left && left.share != null ? Math.round(left.share * 100) : null;
     status = html`<div class=${`msg ${v.cls}`}>
-      <b>${v.label}</b>${r.evalText && html` <span class="muted">· Bewertung ${r.evalText}</span>`}
-      ${left && left.type === 'forgot' && html`<p>Vorbereitung vergessen: Du hast <b>${de(left.played)}</b> gespielt, im Repertoire steht <b>${de(left.right)}</b>. Der Zug kommt wieder in die Wiederholung.</p>`}
-      ${left && left.type === 'gap' && html`<p>Lücke gefunden: Auf <b>${de(left.san)}</b> hat dein Repertoire keine Antwort${left.share != null ? html` (spielen dort ${Math.round(left.share * 100)} %)` : ''}.</p>`}
+      <b>${v.label}</b>${r.evalText && html` <span class="muted">(${r.evalText.replace('.', ',')})</span>`}
+      ${left && left.type === 'gap' && html`<p><b>Mögliche Lücke:</b> ${de(left.san)} steht nicht in deinem Repertoire (in ${pct} % der Partien gespielt).</p>`}
+      ${left && left.type === 'rare' && html`<p>Seltener Zug: ${de(left.san)} steht nicht in deinem Repertoire (in ${pct < 1 ? 'unter 1' : pct} % der Partien gespielt).</p>`}
+      ${left && left.type === 'novel' && html`<p>${de(left.san)} steht nicht in deinem Repertoire.</p>`}
       ${left && left.type === 'end' && html`<p>Deine Variante war zu Ende, danach hast du frei weitergespielt.</p>`}
-      ${r.verdict === 'held' && html`<p>Du stehst etwas schlechter, aber noch im Rahmen.</p>`}
-      ${r.verdict === 'lost' && left && left.type !== 'forgot' && html`<p>Nach der Vorbereitung ist die Stellung deutlich schlechter geworden.</p>`}
+      ${g.mistakes > 0 && html`<p class="small">${g.mistakes === 1 ? 'Ein Zug musste' : `${g.mistakes} Züge mussten`} nochmal probiert werden; ${g.mistakes === 1 ? 'er kommt' : 'sie kommen'} bald wieder in die Wiederholung.</p>`}
+    </div>`;
+  } else if (g.retry) {
+    status = html`<div class="msg bad">
+      <b>Nicht ganz.</b> ${de(g.retry.played)} steht nicht in deinem Repertoire. Probier's nochmal.
+      ${g.retry.shown ? html`<p>Im Repertoire steht <b>${de(g.retry.right)}</b> (grüner Pfeil).</p>` : html`<div><button class="link" onClick=${() => g.showSolution()}>Lösung zeigen</button></div>`}
     </div>`;
   } else if (g.thinking) status = html`<div class="msg idle">${g.loadingMaia ? 'Maia wird geladen (einmalig ca. 22 MB) …' : 'Gegner zieht …'}</div>`;
   else if (g.phase === 'free') status = html`<div class="msg ask"><b>Raus aus der Vorbereitung.</b> Spiele noch ${g.freeLeft} ${g.freeLeft === 1 ? 'Zug' : 'Züge'} – dann wird die Stellung bewertet.</div>`;
@@ -357,22 +406,25 @@ export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade
       <div class="trainer-head">
         <div>
           <div class="eyebrow">Testpartie</div>
-          ${reps.length > 1 && onSwitch
-            ? html`<select class="scrim-rep" aria-label="Repertoire für die Testpartie" value=${rep.id} onChange=${e => onSwitch(e.target.value)}>
-                ${['white', 'black'].map(c => reps.some(r => r.color === c) && html`<optgroup label=${c === 'white' ? 'Mit Weiß' : 'Mit Schwarz'}>
-                  ${reps.filter(r => r.color === c).map(r => html`<option value=${r.id}>${r.name}</option>`)}
-                </optgroup>`)}
-              </select>`
-            : html`<h2>${rep.name}</h2>`}
+          ${!(reps.length > 1 && onSwitch) && html`<h2>${rep.name}</h2>`}
         </div>
         <button class="btn ghost small" onClick=${onExit}>Beenden</button>
       </div>
-      <p class="muted small">Du spielst dein Repertoire gegen echte Gegnerzüge. Verlässt die Partie dein Repertoire, bewertet die Engine die Stellung.</p>
+      ${reps.length > 1 && onSwitch && html`<label class="scrim-rep">Wähle dein Repertoire
+        <select value=${rep.id} onChange=${e => onSwitch(e.target.value)}>
+          ${['white', 'black'].map(c => reps.some(r => r.color === c) && html`<optgroup label=${c === 'white' ? 'Mit Weiß' : 'Mit Schwarz'}>
+            ${reps.filter(r => r.color === c).map(r => html`<option value=${r.id}>${r.name}</option>`)}
+          </optgroup>`)}
+        </select>
+      </label>`}
+      <p class="muted small">${OPP_TEXT[opp] || OPP_TEXT.maia} Verlässt die Partie dein Repertoire, folgen noch ein paar Züge, dann bewertet Stockfish die Stellung.</p>
       <div class="opp-choice small" role="radiogroup" aria-label="Gegner">
         <b>Gegner</b>
-        <label class="check"><input type="radio" name="opp" checked=${opp === 'db'} onChange=${() => setOpp('db')} /> Echte Partien <span class="muted">(Lichess-Datenbank: die Züge, die Spieler dort am häufigsten wählen)</span></label>
-        <label class="check"><input type="radio" name="opp" checked=${opp === 'maia'} onChange=${() => setOpp('maia')} /> Maia <span class="muted">(zieht wie ein Mensch)</span></label>
-        <label class="check"><input type="radio" name="opp" checked=${opp === 'sf'} onChange=${() => setOpp('sf')} /> Stockfish <span class="muted">(volle Stärke)</span></label>
+        ${[['db', 'Lichess-Spieler'], ['maia', 'Maia-Bot'], ['sf', 'Stockfish', 'stärkste Stufe']].map(([k, t, sub]) => html`<div class="opp-row">
+          <label class="check"><input type="radio" name="opp" checked=${opp === k} onChange=${() => setOpp(k)} /> ${t}${sub && html` <span class="muted">(${sub})</span>`}</label>
+          <button class=${`info-btn ${info === k ? 'on' : ''}`} aria-label=${`Was ist ${t}?`} aria-expanded=${info === k} onClick=${() => setInfo(info === k ? null : k)}>i</button>
+        </div>
+        ${info === k && html`<p class="opp-info muted">${OPP_INFO[k]}</p>`}`)}
       </div>
       ${opp === 'db' && html`<label class="small">Spielstärke
         <select value=${dbPreset} onChange=${e => setSettings({ oppDb: e.target.value, ...(legacy ? { opponent: 'db' } : {}) })}>
@@ -391,10 +443,10 @@ export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade
       ${g && g.moves.length > 0 && html`<div class="tree">${de(g.moves.join(' '))}</div>`}
       <div class="row trainer-actions">
         ${g && g.phase === 'done' && html`<button class="btn primary" onClick=${() => g.start()}>Nächste Testpartie</button>`}
-        ${g && g.phase === 'done' && where && left.type !== 'forgot' && html`<button class="btn" onClick=${() => onEdit(where)}>${left.type === 'gap' ? 'Lücke im Editor schließen' : 'Variante im Editor verlängern'}</button>`}
+        ${g && g.phase === 'done' && where && html`<button class="btn" onClick=${() => onEdit(where)}>${left.type === 'end' ? 'Variante im Editor verlängern' : 'Zug im Editor ergänzen'}</button>`}
         ${g && g.phase !== 'done' && g.moves.length > 0 && html`<button class="btn small ghost" onClick=${() => g.start()}>Neu starten</button>`}
       </div>
-      ${g && html`<div class="muted small">Diese Sitzung: ${g.tally.won} gewonnen · ${g.tally.held} gehalten · ${g.tally.lost} verloren</div>`}
+      ${g && g.tally.games > 0 && html`<div class="muted small">Diese Sitzung: ${g.tally.games} ${g.tally.games === 1 ? 'Partie' : 'Partien'} · Vorbereitung ${g.tally.clean}× sicher gespielt${g.tally.gaps ? ` · ${g.tally.gaps} mögliche ${g.tally.gaps === 1 ? 'Lücke' : 'Lücken'} gefunden` : ''}</div>`}
       <div class="row toggles">
         <label class="check"><input type="checkbox" checked=${settings.sound} onChange=${e => setSettings({ sound: e.target.checked })} /> Ton</label>
       </div>

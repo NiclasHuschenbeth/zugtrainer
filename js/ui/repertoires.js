@@ -7,7 +7,6 @@ import { Menu, MenuDivider, MenuItem } from './menu.js';
 import { InstallHint, Onboarding } from './onboarding.js';
 import { RangeSlider, rangeLabel } from './rangeslider.js';
 import { HomeReco } from './reco.js';
-import { CoveragePanel } from './editor.js';
 import { CONFIG } from '../config.js';
 import { pgnAuthor } from '../lib/reference.js';
 import { MoreCourses } from './coursechoice.js';
@@ -109,7 +108,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
         editing
           ? html`<label class="rep-row edit-row" key=${rep.id}>
               <input type="checkbox" checked=${picked.has(rep.id)} onChange=${e => pick(rep.id, e.target.checked)} />
-              <b>${rep.name}</b>${isCourse(rep.id) && html` <span class="muted small">Kurs</span>`}
+              <b>${rep.name}</b>
             </label>`
           : html`<${RepRow} key=${rep.id} rep=${rep} db=${db} train=${train} open=${() => open(rep.id)} />`,
       )}</div>
@@ -295,6 +294,12 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
   const ranges = (db.settings.ranges || {})[rep.id] || {};
   const [openRange, setOpenRange] = useState(null);
   const [pick, setPick] = useState(false);
+  const [openLessons, setOpenLessons] = useState(() => new Set()); // aufgeklappte Lektionen (anfangs alle zu)
+  const flipLesson = name => {
+    const n = new Set(openLessons);
+    n.has(name) ? n.delete(name) : n.add(name);
+    setOpenLessons(n);
+  };
   const setRange = (i, f, t) => setSettings({ ranges: { ...(db.settings.ranges || {}), [rep.id]: { ...ranges, [i]: { from: f, to: t } } } });
   const clearRange = i => { const r = { ...ranges }; delete r[i]; setSettings({ ranges: { ...(db.settings.ranges || {}), [rep.id]: r } }); };
   const dd = derived(rep);
@@ -348,11 +353,8 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           </div>
         </div>
         <${Menu} label="Werkzeuge" className="btn" align="right">
-          <${MenuItem} title="Editor" hint="Züge, Varianten und Kommentare bearbeiten" onClick=${() => edit(rep.id)} />
-          <${MenuItem} title="Abdeckung prüfen" hint="Welche häufigen Gegnerzüge fehlen dir noch? (unten auf dieser Seite)" onClick=${() => { const el = document.getElementById('coverage-panel'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} />
-          ${ksAll.length > 0 && html`<${MenuItem} title="Lösungstexte laden" hint="Erklärungen zu den Schlüsselstellungen aus einer .json-Datei des Kurses" onClick=${pickSolutions} />`}
+          <${MenuItem} title="Repertoire bearbeiten" hint="Züge, Varianten und Kommentare im Editor ändern" onClick=${() => edit(rep.id)} />
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
-          <${MenuItem} title="Meine Partien auswerten" hint="Wo bist du in deinen Partien abgewichen?" onClick=${() => compare(rep)} />
           <${MenuDivider} />
           ${isCourse
             ? html`<${MenuItem} title="Kurs ausblenden" hint="Lernstand bleibt; zurückholen auf der Startseite unter „Weitere freigeschaltete Kurse“" onClick=${() => confirm(`Kurs „${rep.name}“ aus der Liste nehmen? Dein Lernstand bleibt erhalten.`) && remove()} />`
@@ -402,9 +404,21 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
       <h2>Kapitel</h2>
       ${prio && html`<p class="muted small prio-note"><span class="prio">★</span> = Priorität: besonders wichtige Varianten. Im Kurs sind sie mit „(P)“ markiert, beim Lernen kommen sie zuerst dran.</p>`}
       <div class="chapters">
-        ${groups.map(g => html`${g.name !== '' || lessons.length > 0 ? html`<div class="lesson-head">${g.name || 'Weitere Kapitel'}
-            <span class="muted small">${g.items.reduce((n, c) => n + c.learned, 0)} von ${g.items.reduce((n, c) => n + c.total, 0)} Zügen gelernt</span></div>` : null}
-          ${g.items.map(c => html`<div class="chapter">
+        ${groups.map(g => {
+          const grouped = g.name !== '' || lessons.length > 0;
+          const isOpen = !grouped || openLessons.has(g.name);
+          const learned = g.items.reduce((n, c) => n + c.learned, 0);
+          const total = g.items.reduce((n, c) => n + c.total, 0);
+          return html`${grouped ? html`<div class="lesson-head">
+            <button class="lesson-toggle" aria-expanded=${isOpen} onClick=${() => flipLesson(g.name)}>
+              <span class="caret">${isOpen ? '▾' : '▸'}</span>
+              <span class="grow"><span class="lesson-name">${g.items.some(c => c.priority) && html`<span class="prio" title="Enthält Prioritäten">★</span> `}${g.name || 'Weitere Kapitel'}</span>
+                <span class="muted small">${g.items.length} ${g.items.length === 1 ? 'Kapitel' : 'Kapitel'} · ${learned} von ${total} Zügen gelernt</span>
+                <span class="progress"><span style=${{ width: `${pctOf(learned, total)}%` }}></span></span></span>
+            </button>
+            <button class="btn small" disabled=${learned >= total} onClick=${() => train(rep.id, 'learn', g.items.map(c => c.i))} title="Neue Züge aus dieser Lektion lernen">Lernen</button>
+          </div>` : null}
+          ${isOpen && g.items.map(c => html`<div class="chapter">
           <div class="grow">
             <b>${c.priority && html`<span class="prio" title="Priorität">★</span> `}${c.name}${ranges[c.i] && html`<span class="range-badge" title="Eigener Zugbereich für dieses Kapitel">${rangeLabel(ranges[c.i].from, ranges[c.i].to)}</span>`}</b>
             <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
@@ -418,11 +432,11 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           <div class="row between"><span class="small muted">Zugbereich nur für dieses Kapitel</span><b class="depth-val">${ranges[c.i] ? rangeLabel(ranges[c.i].from, ranges[c.i].to) : `wie oben (${rangeLabel(from, depth)})`}</b></div>
           <${RangeSlider} from=${ranges[c.i] ? ranges[c.i].from : from} to=${ranges[c.i] ? ranges[c.i].to : depth} onChange=${(f, t) => setRange(c.i, f, t)} />
           ${ranges[c.i] && html`<button class="link small" onClick=${() => clearRange(c.i)}>Zurücksetzen auf den allgemeinen Bereich</button>`}
-        </div>`}`)}`)}
+        </div>`}`)}`;
+        })}
       </div>
     </div>
 
-    <${CoveragePanel} rep=${rep} settings=${db.settings} setSettings=${setSettings} onJump=${(ci, path) => editAt(rep.id, { ci, path })} />
   </div>`;
 }
 

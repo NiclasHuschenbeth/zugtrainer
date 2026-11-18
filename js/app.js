@@ -43,7 +43,7 @@ window.addEventListener('beforeinstallprompt', e => {
 // Ansicht <-> Adresse (#/rep/<id>, #/train/<id>/learn/3, ...): "Zurück" und Neuladen führen zur selben Ansicht.
 const viewToHash = v => {
   if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
-  if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + v.chapter : ''}`;
+  if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + [].concat(v.chapter).join(',') : ''}`;
   if (v.name === 'games' || v.name === 'compare' || v.name === 'analyse' || v.name === 'maia-test') return `#/${v.name}`;
   return '#/';
 };
@@ -51,7 +51,7 @@ const hashToView = h => {
   const [n, id, mode, ch] = h.replace(/^#\/?/, '').split('/');
   if (['rep', 'edit', 'scrim'].includes(n) && id) return { name: n, repId: id, ...(n === 'rep' ? {} : { backTo: { name: 'rep', repId: id } }) };
   if (n === 'train' && id && ['learn', 'review', 'keys'].includes(mode)) {
-    return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? +ch : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
+    return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? (ch.includes(',') ? ch.split(',').map(Number) : +ch) : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
   }
   if (n === 'games' || n === 'compare' || n === 'analyse' || n === 'maia-test') return { name: n };
   return { name: 'home' };
@@ -108,6 +108,7 @@ function App() {
    * Der Kursinhalt wird nicht ins Konto kopiert (siehe sync.js); abgeglichen werden nur der Lernfortschritt und
    * die Liste der vom Nutzer gelöschten Kurse (settings.coursesRemoved), damit sie nicht wiederkommen.
    */
+  const META = 1; // Stand der Metadaten-Angleichung für bearbeitete Kurs-Kopien
   const preloadCourses = async () => {
     try {
       // Erst nur die Versionsnummern holen; den Kursinhalt (mehrere MB) nur für neue oder geänderte Kurse.
@@ -160,7 +161,8 @@ function App() {
         .filter(r => {
           if (removed[r.id]) return false;
           const mine = mineOf(r.id);
-          return !mine || mine.locked || (r.version || 1) > localVersion(mine, r.id);
+          // META: bearbeitete Kopien einmal nachziehen (Prioritäten/Lektionen kamen früher bei Aktualisierungen nicht mit)
+          return !mine || mine.locked || (r.version || 1) > localVersion(mine, r.id) || (mine.pristine !== true && mine.courseMeta !== META);
         })
         .map(r => r.id);
       const found = { count: list.length };
@@ -196,18 +198,32 @@ function App() {
           else add.push(entry);
           continue;
         }
-        const p = { courseVersion: version };
+        const p = { courseVersion: Math.max(version, mine.courseVersion || 0) };
         if (mine.pristine === true && fresh.length) {
           // Vom Nutzer nie bearbeitet: Inhalt austauschen. Der Lernstand hängt an Stellung und Zug und bleibt erhalten.
           if (!sameChapters(mine.chapters, fresh)) reset.push(id);
           p.chapters = fresh;
           updated.push(row.name || mine.name);
         } else {
-          // Bearbeitet (oder unbekannt, weil älter als dieser Merker): nur Namen angleichen und die neue Fassung anbieten
-          if (fresh.length === mine.chapters.length && fresh.some((c, i) => c.name !== mine.chapters[i].name)) {
-            p.chapters = mine.chapters.map((c, i) => ({ ...c, name: fresh[i].name }));
-          }
-          if (fresh.length) p.updateAvailable = version;
+          // Bearbeitet (oder unbekannt, weil älter als dieser Merker): Namen, Lektionen und Prioritäten angleichen
+          // (die Züge bleiben, wie der Nutzer sie hat) und die neue Fassung anbieten
+          // Zuordnung: gleiche Kapitelzahl -> nach Reihenfolge, sonst nach gleichem Namen (selbst angelegte Kapitel bleiben unverändert)
+          const byIndex = fresh.length === mine.chapters.length;
+          const freshByName = new Map(fresh.map(c => [c.name, c]));
+          const same = (a, b) => (a.name === b.name && (a.lesson || '') === (b.lesson || '') && !!a.priority === !!b.priority);
+          const next = mine.chapters.map((c, i) => {
+            const f = byIndex ? fresh[i] : freshByName.get(c.name);
+            if (!f || same(c, f)) return c;
+            const n = { ...c, name: f.name };
+            if (f.lesson) n.lesson = f.lesson;
+            else delete n.lesson;
+            if (f.priority) n.priority = true;
+            else delete n.priority;
+            return n;
+          });
+          if (next.some((c, i) => c !== mine.chapters[i])) p.chapters = next;
+          if (fresh.length && version > localVersion(mine, row.id)) p.updateAvailable = version;
+          p.courseMeta = META;
         }
         if (hasVideos) p.videos = row.videos;
         if (row.color) p.color = row.color;

@@ -466,7 +466,13 @@ label.check.small { font-size: .85rem; }
 /* Lektionen, Priorität, Lernauswahl */
 .scope { display: flex; flex-direction: column; gap: .3rem; margin-top: .9rem; font-size: .85rem; font-weight: 700; color: var(--muted); }
 .scope select { width: 100%; font: inherit; font-weight: 600; color: var(--text); }
-.lesson-head { display: flex; flex-direction: column; gap: .1rem; font-weight: 800; padding: 1rem 0 .3rem; border-bottom: 2px solid var(--line); color: var(--primary); }
+.lesson-head { display: flex; align-items: center; gap: .6rem; padding: .7rem 0 .5rem; border-bottom: 2px solid var(--line); }
+.lesson-toggle { display: flex; align-items: flex-start; gap: .5rem; flex: 1; min-width: 0; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.lesson-toggle .grow { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.lesson-toggle .lesson-name { font-weight: 800; color: var(--primary); }
+.lesson-toggle .caret { color: var(--primary); width: 1rem; flex: none; }
+.lesson-toggle .progress { display: block; max-width: 260px; }
+.lesson-toggle .progress > span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
 .lesson-head:first-child { padding-top: .2rem; }
 .prio { color: var(--accent); }
 
@@ -576,7 +582,8 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .ref-comment { margin-top: .15rem; }
 .ref-choose summary { cursor: pointer; }
 .list-tools { margin-bottom: -.4rem; }
-.rep-row.edit-row { display: flex; align-items: center; gap: .6rem; cursor: pointer; min-height: 44px; }
+.rep-row.edit-row { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; text-align: left; gap: .6rem; cursor: pointer; min-height: 44px; color: var(--text); font-size: 1rem; }
+.rep-row.edit-row input { flex: none; }
 .rep-row.edit-row input { width: 1.2rem; height: 1.2rem; }
 .more-courses summary { cursor: pointer; }
 .more-courses .mc-row { gap: .6rem; padding: .25rem 0; border-top: 1px solid var(--line); }

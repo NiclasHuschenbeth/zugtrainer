@@ -212,7 +212,7 @@ export function buildTasks(rep, progress, mode, opts = {}) {
   const sc = scopeChapters(rep, opts.scope);
   const limit = mode === 'learn' ? opts.limit || 5 : Infinity;
   for (const line of ordered) {
-    if (opts.chapter != null && line.chapter !== opts.chapter) continue;
+    if (opts.chapter != null && (Array.isArray(opts.chapter) ? !opts.chapter.includes(line.chapter) : line.chapter !== opts.chapter)) continue;
     if (sc && !sc.has(line.chapter)) continue;
     const ask = [];
     line.keys.forEach((k, i) => {

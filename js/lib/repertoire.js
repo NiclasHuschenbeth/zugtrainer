@@ -5,9 +5,9 @@ import { makeFen, parseFen } from 'chessops/fen.js';
 import { Chess } from 'chessops/chess.js';
 import { makeSquare } from 'chessops/util.js';
 
-/** Anzeige mit Figurinen (♘ ♗ ♖ ♕ ♔), Bauern ohne Zeichen. Intern und im PGN bleibt es englisch (N, B, R, Q, K). */
+/** Anzeige mit Figurinen (♘ ♗ ♖ ♕ ♔), Bauern ohne Zeichen, Rochade als 0-0. Intern und im PGN bleibt es englisch (N, B, R, Q, K). */
 const FIG = { N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔' };
-export const de = san => san.replace(/[NBRQK]/g, c => FIG[c]);
+export const de = san => san.replace(/O-O-O/g, '0-0-0').replace(/O-O/g, '0-0').replace(/[NBRQK]/g, c => FIG[c]);
 
 export const epdOf = fen => fen.split(' ').slice(0, 4).join(' ');
 export const turnOf = fen => (fen.split(' ')[1] === 'w' ? 'white' : 'black');

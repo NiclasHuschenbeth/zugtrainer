@@ -38,7 +38,7 @@ export function StatsView({ games, color, db, setSettings, openRep }) {
   const strong = enough.filter(e => e.score >= 0.55).sort((a, b) => b.score - a.score).slice(0, 5);
 
   return html`<div class="stack">
-    <p class="muted small">Score = Siege plus halbe Remis, geteilt durch alle Partien. Probleme und Stärken werden erst ab ${MIN_GAMES} Partien einer Eröffnung gezeigt, damit Zufall nicht zählt.${st.unknown > 0 ? ` ${st.unknown} von ${mine.length} Partien konnten keiner Eröffnung zugeordnet werden.` : ''}</p>
+    <p class="muted small">Score = Siege plus halbe Remis, geteilt durch alle Partien. Probleme und Stärken werden erst ab ${MIN_GAMES} Partien einer Eröffnung gezeigt, damit Zufall nicht zählt.${st.unknown > 0 ? ` ${st.unknown} von ${mine.length} Partien mit selteneren Eröffnungen sind nicht eigens aufgeführt.` : ''}</p>
     <div class="grid2 wide">
       <div class="card">
         <h3 class="flat">Hier hast du Schwierigkeiten</h3>

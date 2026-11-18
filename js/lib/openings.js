@@ -1,35 +1,63 @@
 // Eröffnungen erkennen und auswerten (Namen: lichess-org/chess-openings, CC0).
 import { outcomeFor } from './games.js';
-import { OPENINGS_DE } from './openings-de.js';
+import { OPENINGS_DE, SETUP_MOVES } from './openings-de.js';
 import { de } from './repertoire.js';
 
 let table = null;
-const famMoves = new Map(); // Familie -> { moves, exact }
+const famMoves = new Map(); // deutscher Familienname -> { moves, exact }
 /** Lädt die Namenstabelle erst bei Bedarf. */
 export async function loadOpenings() {
   if (!table) {
     const rows = (await import('./openings-data.js')).default;
     table = new Map(rows.map(([eco, name, moves]) => [moves, { eco, name }]));
-    // Anfangszüge je Familie: der Eintrag mit genau dem Familiennamen, sonst der kürzeste
+    // Anfangszüge je (deutscher) Familie: der Eintrag mit genau dem Familiennamen, sonst der kürzeste
     for (const [, name, moves] of rows) {
-      const f = familyOf(name);
+      const fam = familyOf(name);
+      const f = germanName(fam);
+      if (!f) continue;
+      const exact = name === fam;
       const old = famMoves.get(f);
-      if (name === f ? !old || !old.exact || moves.length < old.moves.length : !old || (!old.exact && moves.length < old.moves.length)) {
-        famMoves.set(f, { moves, exact: name === f });
-      }
+      if (!old || (exact && !old.exact) || (exact === old.exact && moves.length < old.moves.length)) famMoves.set(f, { moves, exact });
     }
+    for (const [f, moves] of Object.entries(SETUP_MOVES)) famMoves.set(f, { moves, exact: true });
   }
   return table;
 }
 
 const MAX_PLIES = 14;
-/** Tiefster passender Eintrag für den Anfang der Partie (sonst null). */
-export function openingOf(game, map) {
+/** Tiefster passender Eintrag für den Anfang der Partie, dessen Familie einen eigenen Namen hat (sonst null). */
+function lichessHit(game, map) {
   for (let n = Math.min(MAX_PLIES, game.moves.length); n >= 1; n--) {
     const hit = map.get(game.moves.slice(0, n).join(' '));
-    if (hit) return hit;
+    if (hit && germanName(familyOf(hit.name))) return hit;
   }
   return null;
+}
+
+/** Züge einer Seite in den ersten n Halbzügen (ohne Schach-/Matt-Zeichen). */
+const sideMoves = (game, white, n) => new Set(game.moves.slice(0, n).filter((_, i) => (i % 2 === 0) === white).map(s => s.replace(/[+#]/g, '')));
+
+/**
+ * Eröffnung einer Partie -> { family (deutsch), name (Lichess-Name für die Untervariante) } | null.
+ * Zusätzlich zu den Lichess-Namen:
+ * - Königsindischer Angriff: Weiß baut ♘f3, g3, ♗g2, d3 auf (ohne d4/c4). Lichess nennt schon 1.♘f3 d5 2.g3 so – das ist sonst Réti.
+ * - Königsindisch / Grünfeld-Indisch: 1.d4 mit …♘f6 und …g6 ohne eigenen Namen: mit …d5 Grünfeld, mit …♗g7 Königsindisch.
+ */
+export function openingOf(game, map) {
+  const hit = lichessHit(game, map);
+  const family = hit ? germanName(familyOf(hit.name)) : null;
+  const w = sideMoves(game, true, 20);
+  if (['Nf3', 'g3', 'Bg2', 'd3'].every(m => w.has(m)) && !w.has('d4') && !w.has('c4')) {
+    return { family: 'Königsindischer Angriff', name: 'Königsindischer Angriff' };
+  }
+  if (!hit || family === 'Königsindisch') {
+    const b = sideMoves(game, false, 16);
+    if (game.moves[0] === 'd4' && b.has('Nf6') && b.has('g6')) {
+      if (b.has('d5')) return { family: 'Grünfeld-Indisch', name: 'Grünfeld-Indisch' };
+      if (b.has('Bg7')) return { family: 'Königsindisch', name: hit && family === 'Königsindisch' ? hit.name : 'Königsindisch' };
+    }
+  }
+  return hit ? { family, name: hit.name } : null;
 }
 
 const DE = {
@@ -97,7 +125,8 @@ const DE = {
 };
 
 export const familyOf = name => name.split(':')[0];
-export const germanName = name => OPENINGS_DE[name] || DE[name] || name;
+/** Deutscher Name einer Familie; null = nicht eigens benennen. Schon deutsche Namen bleiben, wie sie sind. */
+export const germanName = name => (name in OPENINGS_DE ? OPENINGS_DE[name] : DE[name] || name);
 /** Anfangszüge einer Eröffnungsfamilie zum Anzeigen ("1.e4 e5 2.♘f3 ♘f6"), sonst ''. */
 export function openingMoves(family) {
   const m = famMoves.get(family);
@@ -123,7 +152,7 @@ export function openingStats(games, map) {
       unknown++;
       continue;
     }
-    const f = familyOf(op.name);
+    const f = op.family;
     let e = fam.get(f);
     if (!e) fam.set(f, (e = { name: f, n: 0, w: 0, d: 0, l: 0, vars: new Map() }));
     add(e, g);

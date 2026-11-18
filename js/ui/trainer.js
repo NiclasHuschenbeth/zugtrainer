@@ -406,22 +406,21 @@ function Status({ e, rep }) {
   </div>`;
 }
 
+/**
+ * Nur der zuletzt gespielte Zug mit seinem Kommentar (keine ganze Zugliste: Kommentare weiter vorn könnten
+ * spätere Züge verraten). Während auf die Antwort gewartet wird, bleibt der Kommentar des Gegnerzugs verborgen,
+ * er kann den gesuchten Zug nennen; er erscheint, sobald der eigene Zug gespielt ist.
+ */
 function MoveList({ e, line }) {
-  const ref = useRef(null);
   const shown = e ? e.shown : 0;
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [shown]);
-  const items = [];
-  for (let i = 0; i < shown; i++) {
-    const n = line.nodes[i];
-    const before = i ? line.nodes[i - 1].fen : line.startFen;
-    const label = moveLabel(before);
-    const showLabel = whiteLabel(label) || i === 0 || line.nodes[i - 1].comment;
-    items.push(html`<span class=${`mv ${line.keys[i] ? 'mine' : ''} ${i === shown - 1 ? 'last' : ''}`}>
-      ${showLabel && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph || ''}
-    </span>`);
-    if (n.comment) items.push(html`<span class="cm">${n.comment}</span>`);
-  }
-  return html`<div class="movelist" ref=${ref}>${items.length ? items : html`<span class="muted">Grundstellung</span>`}</div>`;
+  if (!shown) return html`<div class="movelist last-only"><span class="muted">Grundstellung</span></div>`;
+  const i = shown - 1;
+  const n = line.nodes[i];
+  const before = i ? line.nodes[i - 1].fen : line.startFen;
+  const asking = e && e.waiting && e.phase === 'quiz';
+  return html`<div class="movelist last-only">
+    <div class="small muted">Letzter Zug</div>
+    <b class="mv-last">${moveText(before, n.san)}${n.glyph || ''}</b>
+    ${n.comment && !asking && html`<p class="cm">${n.comment}</p>`}
+  </div>`;
 }

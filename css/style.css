@@ -281,6 +281,9 @@ coords.squares:nth-of-type(odd) :nth-child(odd), coords.squares:nth-of-type(even
 .mv .no { color: var(--muted); font-weight: 400; }
 .mv.last { background: var(--panel2); outline: 1px solid var(--line); }
 .cm { display: block; color: var(--muted); font-size: .88rem; line-height: 1.4; margin: .1rem 0 .3rem; }
+.movelist.last-only { max-height: none; overflow: visible; }
+.movelist.last-only .mv-last { display: block; font-size: 1.15rem; margin: .1rem 0 .2rem; }
+.movelist.last-only .cm { font-size: .92rem; }
 .trainer-actions { min-height: 2.6rem; }
 .finish { text-align: center; padding: 1.5rem 0; }
 .finish .row { justify-content: center; margin-top: 1rem; }

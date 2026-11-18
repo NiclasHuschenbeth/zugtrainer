@@ -5,9 +5,9 @@ import { makeFen, parseFen } from 'chessops/fen.js';
 import { Chess } from 'chessops/chess.js';
 import { makeSquare } from 'chessops/util.js';
 
-/** Anzeige mit deutschen Figurenbuchstaben (S, L, T, D). Intern und im PGN bleibt es englisch. */
-const DE = { N: 'S', B: 'L', R: 'T', Q: 'D' };
-export const de = san => san.replace(/[NBRQ]/g, c => DE[c]);
+/** Anzeige mit Figurinen (♘ ♗ ♖ ♕ ♔), Bauern ohne Zeichen. Intern und im PGN bleibt es englisch (N, B, R, Q, K). */
+const FIG = { N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔' };
+export const de = san => san.replace(/[NBRQK]/g, c => FIG[c]);
 
 export const epdOf = fen => fen.split(' ').slice(0, 4).join(' ');
 export const turnOf = fen => (fen.split(' ')[1] === 'w' ? 'white' : 'black');

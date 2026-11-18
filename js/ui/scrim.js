@@ -27,7 +27,7 @@ const VERDICT = {
   lost: { label: 'Verloren', cls: 'bad' },
 };
 
-/** Stockfish für einzelne Abfragen: eval(fen) -> beste Linie (Bewertung aus Sicht von Weiß). */
+/** Stockfish für einzelne Abfragen: eval(fen) -> beste Variante (Bewertung aus Sicht von Weiß). */
 function makeJudge() {
   let want = null;
   const finish = () => {
@@ -216,7 +216,7 @@ class Game {
     if (this.phase === 'prep') {
       const known = this.index.get(epdOf(fen));
       if (!known) {
-        // eigene Linie endet auf einem Gegnerzug: ab hier frei
+        // eigene Variante endet auf einem Gegnerzug: ab hier frei
         this.leave({ type: 'end', fen });
       } else {
         const san = makeSanAndPlay(pos.clone(), move);
@@ -341,7 +341,7 @@ export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade
       <b>${v.label}</b>${r.evalText && html` <span class="muted">· Bewertung ${r.evalText}</span>`}
       ${left && left.type === 'forgot' && html`<p>Vorbereitung vergessen: Du hast <b>${de(left.played)}</b> gespielt, im Repertoire steht <b>${de(left.right)}</b>. Der Zug kommt wieder in die Wiederholung.</p>`}
       ${left && left.type === 'gap' && html`<p>Lücke gefunden: Auf <b>${de(left.san)}</b> hat dein Repertoire keine Antwort${left.share != null ? html` (spielen dort ${Math.round(left.share * 100)} %)` : ''}.</p>`}
-      ${left && left.type === 'end' && html`<p>Deine Linie war zu Ende, danach hast du frei weitergespielt.</p>`}
+      ${left && left.type === 'end' && html`<p>Deine Variante war zu Ende, danach hast du frei weitergespielt.</p>`}
       ${r.verdict === 'held' && html`<p>Du stehst etwas schlechter, aber noch im Rahmen.</p>`}
       ${r.verdict === 'lost' && left && left.type !== 'forgot' && html`<p>Nach der Vorbereitung ist die Stellung deutlich schlechter geworden.</p>`}
     </div>`;
@@ -391,7 +391,7 @@ export function Scrim({ rep, reps = [], onSwitch, settings, setSettings, onGrade
       ${g && g.moves.length > 0 && html`<div class="tree">${de(g.moves.join(' '))}</div>`}
       <div class="row trainer-actions">
         ${g && g.phase === 'done' && html`<button class="btn primary" onClick=${() => g.start()}>Nächste Testpartie</button>`}
-        ${g && g.phase === 'done' && where && left.type !== 'forgot' && html`<button class="btn" onClick=${() => onEdit(where)}>${left.type === 'gap' ? 'Lücke im Editor schließen' : 'Linie im Editor verlängern'}</button>`}
+        ${g && g.phase === 'done' && where && left.type !== 'forgot' && html`<button class="btn" onClick=${() => onEdit(where)}>${left.type === 'gap' ? 'Lücke im Editor schließen' : 'Variante im Editor verlängern'}</button>`}
         ${g && g.phase !== 'done' && g.moves.length > 0 && html`<button class="btn small ghost" onClick=${() => g.start()}>Neu starten</button>`}
       </div>
       ${g && html`<div class="muted small">Diese Sitzung: ${g.tally.won} gewonnen · ${g.tally.held} gehalten · ${g.tally.lost} verloren</div>`}

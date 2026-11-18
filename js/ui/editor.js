@@ -283,7 +283,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
         ${hits.length
           ? hits.map(h => html`<span class="ref-item"><span class="muted">${h.rep.name}:</span>${' '}${h.moves.length
               ? html`${h.moves.slice(0, 3).map((m, i) => html`${i ? ' ' : ''}<button class=${`link ref-move ${m.main && m.own ? 'main' : ''}`} onClick=${() => playSan(m.san)}>${moveText(fen, m.san)}</button>`)}${h.moves.length > 3 && html`${' '}<button class="link muted" title="Alle Züge im Reiter „Repertoires“" onClick=${() => setTab('refs')}>+${h.moves.length - 3}</button>`}`
-              : html`<span class="muted">Linie endet</span>`}</span>`)
+              : html`<span class="muted">Variante endet</span>`}</span>`)
           : html`<span class="muted">Nicht mehr im Repertoire (zuletzt ${lastText})</span>`}
       </div>`}
     </div>
@@ -626,7 +626,7 @@ function RefPanel({ refs, refOff, setRefOff, hits, fen, known, lastText, onPlay 
                     ${m.comment && html`<div class="muted ref-comment">„${short(m.comment)}“</div>`}
                   </div>
                 </div>`)
-              : html`<div class="muted small">Hier endet die Linie (Kapitel „${h.end}“).</div>`}
+              : html`<div class="muted small">Hier endet die Variante (Kapitel „${h.end}“).</div>`}
           </div>`)
         : html`<p class="muted small">${known >= 0 ? `Diese Stellung steht in keinem ausgewählten Repertoire. Zuletzt im Repertoire ${lastText}.` : 'Diese Stellung steht in keinem ausgewählten Repertoire.'}</p>`}
     <details class="ref-choose">
@@ -944,7 +944,7 @@ export function CoveragePanel({ rep, settings, setSettings, onJump }) {
       ${res.truncated && html`<div class="muted small">Nach ${res.checked} Stellungen gestoppt – die wichtigsten Lücken stehen unten.</div>`}
       ${!res.gaps.length && !res.error && html`<div class="muted small">Keine Lücken über der Schwelle gefunden (${res.checked} Stellungen geprüft).</div>`}
       ${missing.length > 0 && html`<div class="eyebrow">Fehlende Gegnerzüge (${missing.length})</div><div class="list cover">${missing.map(row)}</div>`}
-      ${ends.length > 0 && html`<div class="eyebrow">Linie endet, Gegner spielt weiter (${ends.length})</div><div class="list cover">${ends.map(row)}</div>`}
+      ${ends.length > 0 && html`<div class="eyebrow">Variante endet, Gegner spielt weiter (${ends.length})</div><div class="list cover">${ends.map(row)}</div>`}
     `}
   </div>`;
 }

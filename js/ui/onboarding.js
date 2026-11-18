@@ -1,6 +1,6 @@
 import { html, useEffect, useState } from 'preact';
 
-const STEPS = ['Repertoire', 'Erste Linie', 'Tagesziel'];
+const STEPS = ['Repertoire', 'Erste Variante', 'Tagesziel'];
 
 const GOALS = [
   { n: 10, label: 'Entspannt' },
@@ -9,7 +9,7 @@ const GOALS = [
   { n: 50, label: 'Intensiv' },
 ];
 
-/** Erststart in drei Schritten: Repertoire laden, erste Linie lernen, Tagesziel wählen. */
+/** Erststart in drei Schritten: Repertoire laden, erste Variante lernen, Tagesziel wählen. */
 export function Onboarding({ step, rep, train, goal, setGoal, finish, account, openLogin, sample, upload, uploadOpen, shopUrl }) {
   return html`<div class="card onboarding">
     <div class="steps" aria-label=${`Schritt ${step} von 3`}>
@@ -44,9 +44,9 @@ export function Onboarding({ step, rep, train, goal, setGoal, finish, account, o
 
     ${step === 2 &&
     html`<div class="stack tight">
-      <h1>Lerne deine erste Linie</h1>
-      <p>Dein Repertoire „${rep.name}“ ist geladen. Jetzt lernst du die erste Linie: Du siehst jeden Zug zuerst vorgespielt und spielst ihn danach selbst nach. Das dauert nur ein paar Minuten.</p>
-      <div class="row"><button class="btn primary big" onClick=${() => train(rep.id, 'learn')}>Erste Linie lernen</button></div>
+      <h1>Lerne deine erste Variante</h1>
+      <p>Dein Repertoire „${rep.name}“ ist geladen. Jetzt lernst du die erste Variante: Du siehst jeden Zug zuerst vorgespielt und spielst ihn danach selbst nach. Das dauert nur ein paar Minuten.</p>
+      <div class="row"><button class="btn primary big" onClick=${() => train(rep.id, 'learn')}>Erste Variante lernen</button></div>
     </div>`}
 
     ${step === 3 &&

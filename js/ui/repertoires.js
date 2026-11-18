@@ -349,7 +349,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           <h1 class="rep-title">${rep.name}</h1>
           <div class="muted small">
             <span class=${`pill ${rep.color}`}>${rep.color === 'white' ? 'Weiß' : 'Schwarz'}</span>
-            ${rep.chapters.length} Kapitel · ${s.lines} Linien · ${s.total} Züge
+            ${rep.chapters.length} Kapitel · ${s.lines} Varianten · ${s.total} Züge
           </div>
         </div>
         <${Menu} label="Mehr" className="btn" align="right">
@@ -421,7 +421,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           ${isOpen && g.items.map(c => html`<div class="chapter">
           <div class="grow">
             <b>${c.priority && html`<span class="prio" title="Priorität">★</span> `}${c.name}${ranges[c.i] && html`<span class="range-badge" title="Eigener Zugbereich für dieses Kapitel">${rangeLabel(ranges[c.i].from, ranges[c.i].to)}</span>`}</b>
-            <div class="muted small">${c.lines} ${c.lines === 1 ? 'Linie' : 'Linien'} · ${c.learned} von ${c.total} Zügen gelernt</div>
+            <div class="muted small">${c.lines} ${c.lines === 1 ? 'Variante' : 'Varianten'} · ${c.learned} von ${c.total} Zügen gelernt</div>
             <div class="progress"><div style=${{ width: `${pctOf(c.learned, c.total)}%` }}></div></div>
           </div>
           <button class="btn small" disabled=${c.learned >= c.total} onClick=${() => train(rep.id, 'learn', c.i)}>Lernen</button>
@@ -596,7 +596,7 @@ function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
       <div class="row"><button class="btn primary" type="button" onClick=${() => newRepertoire(color, name)}>Im Editor anlegen</button></div>
     </div>`}
     ${tab === 'pgn' && html`<form class="stack" onSubmit=${submit}>
-    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. aus ChessBase oder der Export einer Lichess-Studie. Jede Partie in der Datei wird ein Kapitel, jede Variante eine Linie.</p>
+    <p class="muted">PGN-Datei mit Varianten und Kommentaren, z. B. aus ChessBase oder der Export einer Lichess-Studie. Jede Partie in der Datei wird ein Kapitel, jede Abzweigung eine eigene Variante.</p>
     <div class="grid2">
       <label>Name
         <input type="text" value=${name} onInput=${e => setName(e.target.value)} placeholder="z. B. Sizilianisch Najdorf" />

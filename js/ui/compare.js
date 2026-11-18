@@ -12,8 +12,8 @@ const opponent = g => (g.userColor === 'white' ? g.black : g.white);
 const sans = list => list.map(e => de(e.san)).join(' oder ');
 
 // Stellungen der Abweichungen (häufigste zuerst, jede Stellung nur einmal, max. 20).
-// follow: wie viele eigene Folgezüge in der Repertoire-Linie zusätzlich abgefragt werden.
-const FOLLOW = [[0, 'Nur der Abweichungszug'], [2, '+ 2 Folgezüge'], [4, '+ 4 Folgezüge'], [99, 'Bis zum Linienende']];
+// follow: wie viele eigene Folgezüge in der Repertoire-Variante zusätzlich abgefragt werden.
+const FOLLOW = [[0, 'Nur der Abweichungszug'], [2, '+ 2 Folgezüge'], [4, '+ 4 Folgezüge'], [99, 'Bis zum Variantenende']];
 function drillKeys(rep, list, follow = 0) {
   const base = [...new Set(list.map(e => `${epdOf(e.fen)}|${e.expected[0].san}`))].slice(0, 20);
   if (!follow) return base;
@@ -187,7 +187,7 @@ function Detail({ e, rep, train }) {
       ? html`<p>Du hast <b class="bad">${label}${de(e.played)}</b> gespielt (roter Pfeil). Dein Repertoire sieht hier <b class="ok">${sans(e.expected)}</b> vor (grün).</p>`
       : html`<p>Dein Gegner spielte <b class="warn">${label}${de(e.played)}</b> (gelber Pfeil). Dein Repertoire behandelt hier nur <b>${sans(e.expected)}</b> – diese Variante fehlt noch.</p>`}
     <p class="muted small">Bilanz in diesen Partien: ${e.w} Siege · ${e.d} Remis · ${e.l} Niederlagen</p>
-    ${e.type === 'you' && html`<button class="btn primary" onClick=${() => train(rep.id, 'practice', null, `${epdOf(e.fen)}|${e.expected[0].san}`)}>Diese Linie üben</button>`}
+    ${e.type === 'you' && html`<button class="btn primary" onClick=${() => train(rep.id, 'practice', null, `${epdOf(e.fen)}|${e.expected[0].san}`)}>Diese Variante üben</button>`}
     <h3>Partien</h3>
     <ul class="games">
       ${e.rows.slice(0, 10).map(({ game, res }) => html`<li>

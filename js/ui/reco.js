@@ -28,10 +28,10 @@ export function RecoCards({ color, db, setSettings, openRep }) {
           <div class="eyebrow">${r.ownedCourseId ? 'Du hast diesen Kurs schon' : 'Passend zu deinen Partien'}</div>
           <h3 class="flat">${r.title}</h3>
           <p>${reasonText(r)}</p>
-          <p class="muted small">${r.ownedCourseId ? 'Diese Linien stehen in deinem Kurs. Wiederhole sie im Trainer.' : r.text}</p>
+          <p class="muted small">${r.ownedCourseId ? 'Diese Varianten stehen in deinem Kurs. Wiederhole sie im Trainer.' : r.text}</p>
           <div class="row between">
             ${r.ownedCourseId
-              ? html`<button class="btn primary" onClick=${() => openRep('course-' + r.ownedCourseId)}>Diese Linien lernen</button>`
+              ? html`<button class="btn primary" onClick=${() => openRep('course-' + r.ownedCourseId)}>Diese Varianten lernen</button>`
               : html`<a class="btn primary" href=${r.url} target="_blank" rel="noopener">Zum Kurs ↗</a>`}
             <button class="link muted small" onClick=${() => hide(r.id)}>Nicht mehr anzeigen</button>
           </div>

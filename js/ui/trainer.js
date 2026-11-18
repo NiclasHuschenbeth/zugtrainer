@@ -1,4 +1,4 @@
-import { html, useEffect, useMemo, useReducer, useRef } from 'preact';
+import { html, useEffect, useMemo, useReducer, useRef, useState } from 'preact';
 import { de } from '../lib/repertoire.js';
 import { chessgroundDests } from 'chessops/compat.js';
 import { makeSan } from 'chessops/san.js';
@@ -9,7 +9,7 @@ import { sounds } from '../lib/sound.js';
 import { Board } from './board.js';
 
 /**
- * Ablauf einer Sitzung. Pro Aufgabe (Linie):
+ * Ablauf einer Sitzung. Pro Aufgabe (Variante):
  *  learn:  Durchgang "teach" (neue Züge werden mit Pfeil gezeigt und nachgespielt),
  *          danach Durchgang "quiz" (dieselben Züge ohne Hilfe).
  *  review / practice: nur "quiz".
@@ -257,6 +257,8 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   const tasks = useMemo(() => buildTasks(rep, progress, mode, { chapter, key: focusKey, visits, depth: settings.depth || 0, from: settings.from || 1, ranges: (settings.ranges || {})[rep.id] || null, alts: !!settings.alts, scope: scopeOf(settings, rep) }), []);
   const [, force] = useReducer(x => x + 1, 0);
   const eng = useRef(null);
+  // Umschalten von „Neue Züge erst vorspielen“ wirkt erst ab der nächsten Variante: kurz sagen (bis dahin sichtbar)
+  const [teachNote, setTeachNote] = useState(null); // Variantennummer beim Umschalten
   const gradeRef = useRef(onGrade);
   gradeRef.current = onGrade;
 
@@ -298,7 +300,7 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
   if (!tasks.length) {
     return html`<div class="card center">
       <h2>${MODE_TITLE[mode]}: ${rep.name}</h2>
-      <p>${mode === 'learn' ? settings.depth || (settings.from || 1) > 1 ? 'Im gewählten Zugbereich ist hier alles gelernt. Erweitere den Bereich, um weiterzumachen.' : 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Linie wurde im Repertoire nicht gefunden.'}</p>
+      <p>${mode === 'learn' ? settings.depth || (settings.from || 1) > 1 ? 'Im gewählten Zugbereich ist hier alles gelernt. Erweitere den Bereich, um weiterzumachen.' : 'Hier gibt es keine neuen Züge mehr – alles gelernt!' : mode === 'review' ? 'Im Moment ist nichts fällig.' : 'Diese Variante wurde im Repertoire nicht gefunden.'}</p>
       <button class="btn primary" onClick=${onExit}>Zurück zur Übersicht</button>
     </div>`;
   }
@@ -324,8 +326,8 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
       </div>
       <div class="progress"><div style=${{ width: `${(done / tasks.length) * 100}%` }}></div></div>
       <div class="muted small">
-        ${Array.isArray(focusKey) ? 'Stellung' : 'Linie'} ${Math.min(taskNo + 1, tasks.length)} von ${tasks.length}
-        ${mode === 'learn' && visits && visits.size > 0 && ' · häufigste Linien aus deinen Partien zuerst'}
+        ${Array.isArray(focusKey) ? 'Stellung' : 'Variante'} ${Math.min(taskNo + 1, tasks.length)} von ${tasks.length}
+        ${mode === 'learn' && visits && visits.size > 0 && ' · häufigste Varianten aus deinen Partien zuerst'}
         ${Array.isArray(focusKey) && (redo ? ' · deine Fehler aus der letzten Sitzung' : ' · hier bist du in deinen Partien abgewichen')}
       </div>
 
@@ -347,12 +349,13 @@ export function Trainer({ rep, progress, mode, chapter, focusKey, visits, settin
                 <button class="btn small" disabled=${!e.waiting} onClick=${() => e.solve()}>Lösung zeigen</button>`}
               ${e && e.phase === 'lineDone' && html`
                 <button class="btn primary" onClick=${() => e.next()}>Weiter ⏎</button>
-                <button class="btn" onClick=${() => e.repeat()}>Linie nochmal</button>`}
+                <button class="btn" onClick=${() => e.repeat()}>Variante nochmal</button>`}
             </div>`}
       <div class="row toggles">
-        ${mode === 'learn' && html`<label class="check" title="Aus: Du wirst sofort abgefragt und nutzt Tipp oder Lösung, wenn du einen Zug nicht kennst. Gilt ab der nächsten Linie.">
-          <input type="checkbox" checked=${settings.teach} onChange=${ev => setSettings({ teach: ev.target.checked })} /> Neue Züge erst vorspielen
+        ${mode === 'learn' && html`<label class="check" title="Aus: Du wirst sofort abgefragt und nutzt Tipp oder Lösung, wenn du einen Zug nicht kennst. Gilt ab der nächsten Variante.">
+          <input type="checkbox" checked=${settings.teach} onChange=${ev => { setSettings({ teach: ev.target.checked }); setTeachNote(e ? e.taskNo : 0); }} /> Neue Züge erst vorspielen
         </label>`}
+        ${mode === 'learn' && teachNote !== null && e && e.taskNo === teachNote && !finished && html`<span class="msg info small teach-note">${settings.teach ? 'Vorspielen ist an' : 'Vorspielen ist aus'} – gilt ab der nächsten Variante.</span>`}
         <label class="check"><input type="checkbox" checked=${settings.sound} onChange=${ev => setSettings({ sound: ev.target.checked })} /> Ton</label>
       </div>
     </div>
@@ -387,8 +390,8 @@ function Status({ e, rep }) {
   let prompt;
   if (e.phase === 'lineDone') {
     prompt = e.lineOk
-      ? html`<div class="msg ok">Linie fehlerfrei gespielt.</div>`
-      : html`<div class="msg bad">Linie mit Fehlern – sie kommt bald wieder dran.</div>`;
+      ? html`<div class="msg ok">Variante fehlerfrei gespielt.</div>`
+      : html`<div class="msg bad">Variante mit Fehlern – sie kommt bald wieder dran.</div>`;
   } else if (e.waiting && e.phase === 'teach') {
     const n = e.line.nodes[e.i];
     prompt = html`<div class="msg teach">

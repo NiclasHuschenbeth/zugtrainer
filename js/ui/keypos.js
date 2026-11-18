@@ -9,7 +9,7 @@ import { Board } from './board.js';
 /**
  * Schlüsselstellungen üben: Stellung zeigen, Nutzer spielt den richtigen Zug.
  * Falscher Zug: noch einmal versuchen (zählt als Fehler). Richtig: Erklärung zur Stellung.
- * Wiederholungsplan wie bei den Linien, aber als eigene Karten (Schlüssel "K:…").
+ * Wiederholungsplan wie bei den Varianten, aber als eigene Karten (Schlüssel "K:…").
  * Am Ende: verpasste Stellungen gezielt nochmal üben (ohne neue Bewertung).
  */
 export function KeyTrainer({ rep, progress, settings, setSettings, onGrade, onExit, onMore, only, next: nextRep }) {

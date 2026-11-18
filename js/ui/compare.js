@@ -36,7 +36,7 @@ function drillKeys(rep, list, follow = 0) {
 
 const COLOR = { white: 'Weiß', black: 'Schwarz' };
 
-export function CompareView({ db, go, train, setSettings, update, openRep, fixedRep }) {
+export function CompareView({ db, go, train, setSettings, update, openRep, fixedRep, noTitle }) {
   const s = db.settings;
   // Pro Farbe ein aktives Repertoire (gespeicherte Wahl, sonst das erste dieser Farbe).
   // fixedRep: das Repertoire ist außen gewählt (Seite „Lücken finden“), dann ohne eigene Auswahl.
@@ -48,7 +48,7 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
   const reps = { white: active('white'), black: active('black') };
   const [sideState, setSide] = useState(reps.white || !reps.black ? 'white' : 'black');
   const side = fixedRep ? fixedRep.color : sideState;
-  const title = fixedRep ? null : html`<h1>Meine Partien auswerten</h1>`;
+  const title = fixedRep || noTitle ? null : html`<h1>Meine Partien auswerten</h1>`;
   const stats = color => html`<${StatsView} games=${db.games} color=${color} db=${db} setSettings=${setSettings} openRep=${openRep} />`;
   const [tab, setTab] = useState('you');
   const [sel, setSel] = useState(null);
@@ -71,7 +71,7 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
   if (!db.repertoires.length) {
     return html`<div class="stack">
       ${title}
-      <p class="muted">So schneidest du in deinen Eröffnungen ab. Mit einem eigenen Repertoire siehst du hier zusätzlich, wo du davon abgewichen bist. <button class="link" onClick=${() => go('home')}>Repertoire hochladen</button></p>
+      <p class="muted">So schneidest du in deinen Eröffnungen ab. Mit einem Repertoire siehst du hier zusätzlich, wo du davon abgewichen bist. <button class="link" onClick=${() => go('home')}>Repertoire hinzufügen</button></p>
       <div class="tabs">
         ${['white', 'black'].map(c => html`<button class=${side === c ? 'on' : ''} onClick=${() => setSide(c)}>Mit ${COLOR[c]} (${gamesAs(c)})</button>`)}
       </div>
@@ -114,7 +114,8 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
   }
 
   const c = data.counts;
-  const pct = n => (c.total ? Math.round((n / c.total) * 100) : 0);
+  const inRep = c.total - c.notcovered; // Partien, die dieses Repertoire überhaupt betreffen
+  const pct = n => (inRep ? Math.round((n / inRep) * 100) : 0);
   const list = tab === 'you' ? data.you : tab === 'opponent' ? data.opponent : null;
   const current = list && (list.find(e => e.key === sel) || list[0]);
 
@@ -125,7 +126,7 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
       ? html`<div class="card center muted">Keine importierten Partien, in denen du ${rep.color === 'white' ? 'Weiß' : 'Schwarz'} hattest.</div>`
       : html`
         <div class="tiles">
-          <div class="tile"><b>${c.total}</b><span>Partien mit ${rep.color === 'white' ? 'Weiß' : 'Schwarz'}</span></div>
+          <div class="tile"><b>${c.total - c.notcovered}</b><span>Partien mit ${rep.color === 'white' ? 'Weiß' : 'Schwarz'} in diesem Repertoire${c.notcovered ? ` (${c.notcovered} weitere mit einem anderen ersten Zug)` : ''}</span></div>
           <div class="tile bad"><b>${c.you}</b><span>du bist abgewichen (${pct(c.you)} %)</span></div>
           <div class="tile warn"><b>${c.opponent}</b><span>Gegnerzug fehlt im Repertoire (${pct(c.opponent)} %)</span></div>
           <div class="tile ok"><b>${c.end}</b><span>Repertoire bis zum Ende gefolgt (${pct(c.end)} %)</span></div>
@@ -135,8 +136,8 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
         <div class="tabs">
           <button class=${tab === 'you' ? 'on' : ''} onClick=${() => { setTab('you'); setSel(null); }}>Deine Abweichungen (${data.you.length})</button>
           <button class=${tab === 'opponent' ? 'on' : ''} onClick=${() => { setTab('opponent'); setSel(null); }}>Lücken im Repertoire (${data.opponent.length})</button>
-          <button class=${tab === 'games' ? 'on' : ''} onClick=${() => setTab('games')}>Alle Partien (${c.total})</button>
           <button class=${tab === 'stats' ? 'on' : ''} onClick=${() => setTab('stats')}>Eröffnungsstatistik</button>
+          <button class=${tab === 'games' ? 'on' : ''} onClick=${() => setTab('games')}>Alle Partien (${c.total})</button>
         </div>
 
         ${tab === 'stats'
@@ -146,8 +147,8 @@ export function CompareView({ db, go, train, setSettings, update, openRep, fixed
           : !list.length
             ? html`<div class="card center muted">${tab === 'you' ? 'Stark – in diesen Partien bist du nie vom Repertoire abgewichen.' : 'Keine Lücken gefunden.'}</div>`
             : html`${tab === 'you' && html`<div class="row between card drill">
-                  <span>Trainiere die Stellungen, in denen du vom Repertoire abgewichen bist – die häufigsten zuerst.
-                    <select value=${s.drillFollow || 0} onChange=${e => setSettings({ drillFollow: +e.target.value })} aria-label="Wie viele Züge abfragen">
+                  <span>Trainiere die Stellungen, in denen du vom Repertoire abgewichen bist – die 20 häufigsten, damit eine Sitzung überschaubar bleibt.
+                    <select class="auto" value=${s.drillFollow || 0} onChange=${e => setSettings({ drillFollow: +e.target.value })} aria-label="Wie viele Züge abfragen">
                       ${FOLLOW.map(([v, t]) => html`<option value=${v}>${t}</option>`)}
                     </select>
                   </span>

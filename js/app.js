@@ -708,8 +708,8 @@ function App() {
         <button class=${isHome ? 'on' : ''} onClick=${() => go('home')}>Start</button>
         <button class=${view.name === 'analyse' ? 'on' : ''} onClick=${() => go('analyse')} title="Freies Brett mit Stockfish, Cloud-Bewertung und Eröffnungsdatenbank">Analyse</button>
         <${Menu} label="Werkzeuge" className=${inTools ? 'on' : ''}>
-          <${MenuItem} title="Testpartie" hint="Ein Repertoire gegen echte Gegnerzüge, Maia oder Stockfish spielen" onClick=${openScrim} />
-          <${MenuItem} title="Lücken finden" hint="Wo fehlt deinem Repertoire etwas? Aus deinen Partien und aus der Datenbank" onClick=${() => go('gaps')} />
+          <${MenuItem} title="Lücken finden" hint="Wo bist du abgewichen, was fehlt deinem Repertoire? Aus deinen Partien und aus der Datenbank" onClick=${() => go('gaps')} />
+          <${MenuItem} title="Testpartie" hint="Ein Repertoire gegen Lichess-Spieler, Maia oder Stockfish spielen" onClick=${openScrim} />
         <//>
       </nav>
       <div class="top-right">

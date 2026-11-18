@@ -16,6 +16,7 @@ import { outcomeFor } from './games.js';
 export function analyseGame(game, index, color) {
   const pos = Chess.default();
   let entered = false;
+  let ownMoves = 0; // eigene Züge bisher: Wer schon im ersten eigenen Zug anders spielt, wollte dieses Repertoire nicht spielen
   for (let ply = 0; ply < game.moves.length; ply++) {
     const fen = makeFen(pos.toSetup());
     const known = index.get(epdOf(fen));
@@ -27,6 +28,7 @@ export function analyseGame(game, index, color) {
       entered = true;
       const san = makeSan(pos, move);
       if (!known.has(san)) {
+        if (pos.turn === color && ownMoves === 0) return { type: 'notcovered', ply: 0 };
         return {
           type: pos.turn === color ? 'you' : 'opponent',
           ply,
@@ -37,6 +39,7 @@ export function analyseGame(game, index, color) {
         };
       }
     }
+    if (pos.turn === color) ownMoves++;
     pos.play(move);
   }
   return entered ? { type: 'complete', ply: game.moves.length } : { type: 'notcovered', ply: 0 };

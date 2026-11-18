@@ -388,6 +388,11 @@ label.check.small { font-size: .85rem; }
 .tile.bad b { color: var(--bad); }
 .tile.warn b { color: var(--warn); }
 .tile.ok b { color: var(--ok); }
+.tiles .tile { cursor: default; }
+.tiles .tile:hover { border-color: var(--line); box-shadow: none; }
+.stat-moves { display: block; font-size: .78rem; color: var(--muted); font-weight: 400; }
+.stat-row .caret { color: var(--muted); }
+.gaps-intro { margin: .2rem 0 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: .3rem; }
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
 .compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 16px; align-items: start; }
 .list { padding: 6px; gap: 2px; max-height: 720px; overflow-y: auto; }

@@ -51,12 +51,15 @@ function Importer({ src, db, update }) {
     try {
       const incoming = await cfg.fetch(user, max, count => setState({ busy: true, text: `${count} Partien geladen …`, kind: 'info' }));
       let added = 0;
+      let total = 0;
       update(cur => {
         const m = mergeGames(cur.games, incoming);
         added = m.added;
+        total = m.games.length;
         return { games: m.games, accounts: { ...cur.accounts, [src]: user.trim() } };
       });
-      setState({ busy: false, text: `${incoming.length} Partien geladen, davon ${added} neu.`, kind: 'ok' });
+      const skipped = incoming.skipped ? ` ${incoming.skipped} übersprungen (Schachvarianten wie Chess960 oder ohne Züge).` : '';
+      setState({ busy: false, text: `${incoming.length} Partien geladen, davon ${added} neu.${skipped} Insgesamt gespeichert: ${total} (aus allen bisherigen Importen).`, kind: 'ok' });
     } catch (err) {
       const text = err instanceof TypeError ? 'Verbindung fehlgeschlagen – bitte Internetverbindung prüfen.' : err.message;
       setState({ busy: false, text, kind: 'bad' });

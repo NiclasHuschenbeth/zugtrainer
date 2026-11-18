@@ -21,7 +21,11 @@ export function GapsView({ db, defaultRepId, go, train, setSettings, update, ope
   return html`<div class="stack gaps">
     <div>
       <h1>Lücken finden</h1>
-      <p class="muted">Wo fehlt deinem Repertoire etwas? Einmal aus deinen eigenen Partien, einmal aus den Zügen, die in der Datenbank häufig gespielt werden.</p>
+      <p class="muted">Hier prüfst du dein Repertoire an der Praxis:</p>
+      <ul class="muted gaps-intro">
+        <li><b>Aus meinen Partien:</b> Lade deine Partien von Lichess oder Chess.com. Du siehst, wo <b>du</b> von deinem Repertoire abgewichen bist, wo dein <b>Gegner</b> etwas gespielt hat, das dein Repertoire nicht behandelt, und wie du in deinen Eröffnungen abschneidest.</li>
+        <li><b>Aus der Datenbank:</b> Welche Züge, die in vielen Partien vorkommen, fehlen deinem Repertoire noch?</li>
+      </ul>
     </div>
     ${rep && html`<label class="gaps-rep">Repertoire
       <select value=${rep.id} onChange=${e => pick(e.target.value)}>
@@ -35,7 +39,7 @@ export function GapsView({ db, defaultRepId, go, train, setSettings, update, ope
       <button class=${tab === 'db' ? 'on' : ''} disabled=${!rep} onClick=${() => setTab('db')}>Aus der Datenbank</button>
     </div>
     ${tab === 'games'
-      ? html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${openRep} fixedRep=${rep} />`
+      ? html`<${CompareView} db=${db} go=${go} train=${train} setSettings=${setSettings} update=${update} openRep=${openRep} fixedRep=${rep} noTitle=${true} />`
       : rep && html`<${CoveragePanel} key=${rep.id} rep=${rep} settings=${db.settings} setSettings=${setSettings} onJump=${(ci, path) => editAt(rep.id, { ci, path })} />`}
   </div>`;
 }

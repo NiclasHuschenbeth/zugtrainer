@@ -1,12 +1,23 @@
 // Eröffnungen erkennen und auswerten (Namen: lichess-org/chess-openings, CC0).
 import { outcomeFor } from './games.js';
+import { OPENINGS_DE } from './openings-de.js';
+import { de } from './repertoire.js';
 
 let table = null;
+const famMoves = new Map(); // Familie -> { moves, exact }
 /** Lädt die Namenstabelle erst bei Bedarf. */
 export async function loadOpenings() {
   if (!table) {
     const rows = (await import('./openings-data.js')).default;
     table = new Map(rows.map(([eco, name, moves]) => [moves, { eco, name }]));
+    // Anfangszüge je Familie: der Eintrag mit genau dem Familiennamen, sonst der kürzeste
+    for (const [, name, moves] of rows) {
+      const f = familyOf(name);
+      const old = famMoves.get(f);
+      if (name === f ? !old || !old.exact || moves.length < old.moves.length : !old || (!old.exact && moves.length < old.moves.length)) {
+        famMoves.set(f, { moves, exact: name === f });
+      }
+    }
   }
   return table;
 }
@@ -86,7 +97,16 @@ const DE = {
 };
 
 export const familyOf = name => name.split(':')[0];
-export const germanName = name => DE[name] || name;
+export const germanName = name => OPENINGS_DE[name] || DE[name] || name;
+/** Anfangszüge einer Eröffnungsfamilie zum Anzeigen ("1.e4 e5 2.♘f3 ♘f6"), sonst ''. */
+export function openingMoves(family) {
+  const m = famMoves.get(family);
+  if (!m) return '';
+  return m.moves
+    .split(' ')
+    .map((s, i) => (i % 2 === 0 ? `${i / 2 + 1}.${de(s)}` : de(s)))
+    .join(' ');
+}
 export const variationOf = name => (name.includes(':') ? name.slice(name.indexOf(':') + 1).trim() : null);
 
 /** Auswertung pro Eröffnungsfamilie für die Partien einer Farbe. */

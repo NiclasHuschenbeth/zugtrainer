@@ -12,10 +12,12 @@ export async function fetchLichess(user, max, onProgress) {
   if (!res.ok) throw new Error(`Lichess antwortet mit Fehler ${res.status}.`);
 
   const games = [];
+  games.skipped = 0;
   const add = line => {
     if (!line.trim()) return;
     const g = fromLichess(JSON.parse(line), name.toLowerCase());
     if (g) games.push(g);
+    else games.skipped++;
     if (onProgress) onProgress(games.length);
   };
   const reader = res.body.getReader();

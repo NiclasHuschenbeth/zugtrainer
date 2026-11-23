@@ -29,10 +29,11 @@ export function BoardSettings({ settings, setSettings, onClose }) {
       </div>
 
       <div class="stack tight size-setting">
-        <label for="board-size"><b>Brettgröße</b> <span class="muted small">(am Computer, beim Lernen)</span></label>
-        <div class="muted small">Das Brett wird nie höher als dein Fenster. „Fenster füllen“ nutzt die ganze Höhe.</div>
-        <input id="board-size" type="range" min="1" max="5" step="1" value=${size} onInput=${ev => setSettings({ boardSize: +ev.target.value })} />
-        <div class="depth-scale">${SIZES.map(s => html`<span class=${s === SIZES[size - 1] ? 'on' : ''}>${s}</span>`)}</div>
+        <label for="board-size"><b>Brettgröße</b> <span class="muted small">(am Computer)</span></label>
+        <div class="muted small">Gilt überall, auch im Analyse-Brett. Du kannst das Brett auch an der Ecke unten rechts größer oder kleiner ziehen. Es wird nie höher als dein Fenster.</div>
+        <input id="board-size" type="range" min="1" max="5" step="1" value=${size} onInput=${ev => setSettings({ boardSize: +ev.target.value, boardPx: null })} />
+        <div class="depth-scale">${SIZES.map(s => html`<span class=${!settings.boardPx && s === SIZES[size - 1] ? 'on' : ''}>${s}</span>`)}</div>
+        ${settings.boardPx && html`<div class="muted small">Gerade eingestellt: selbst gezogen (${settings.boardPx} Pixel breit).</div>`}
       </div>
 
       <div class="stack tight">

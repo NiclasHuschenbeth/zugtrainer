@@ -2,7 +2,7 @@ import { html, useEffect, useReducer, useRef } from 'preact';
 import { Chessground } from 'chessground';
 
 /** Brett-Einstellungen, die für alle Bretter gelten (kommen aus den Einstellungen des Nutzers). */
-export const boardPrefs = { showDests: true, anim: true, input: 'both' };
+export const boardPrefs = { showDests: true, anim: true, input: 'both', onResize: null };
 const listeners = new Set();
 export function setBoardPrefs(p) {
   Object.assign(boardPrefs, p);
@@ -72,6 +72,37 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
     api.current.setAutoShapes(shapes || []);
   }, [fen, orientation, shapes, lastMove]);
 
+  // Zieh-Griff unten rechts: Brett größer/kleiner ziehen (gilt für alle Bretter, wird gespeichert)
+  const startResize = ev => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    const frame = ev.currentTarget.parentElement;
+    const col = () => frame.closest('.editor-board') || frame; // im Editor gehört der Bewertungsbalken mit zur Spalte
+    const w0 = col().getBoundingClientRect().width;
+    const x0 = ev.clientX;
+    const y0 = ev.clientY;
+    const root = document.documentElement;
+    let raf = 0;
+    root.classList.add('resizing');
+    const move = e => {
+      const w = Math.round(Math.min(1600, Math.max(280, w0 + (e.clientX - x0 + e.clientY - y0) / 2)));
+      root.style.setProperty('--board-px', w + 'px');
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; document.body.dispatchEvent(new Event('chessground.resize')); });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      root.classList.remove('resizing');
+      document.body.dispatchEvent(new Event('chessground.resize'));
+      // gespeichert wird die Größe, die tatsächlich erreicht wurde (höchstens Fensterhöhe)
+      const w = Math.round(col().getBoundingClientRect().width);
+      root.style.setProperty('--board-px', w + 'px');
+      if (boardPrefs.onResize) boardPrefs.onResize(w);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   const white = orientation === 'white';
   const files = (white ? 'abcdefgh' : 'hgfedcba').split('');
   const ranks = (white ? '87654321' : '12345678').split('');
@@ -79,5 +110,6 @@ export function Board({ orientation = 'white', fen, lastMove, shapes, onReady, o
     <div class="board" ref=${el}></div>
     <div class="coord-ranks" aria-hidden="true">${ranks.map(r => html`<span>${r}</span>`)}</div>
     <div class="coord-files" aria-hidden="true">${files.map(f => html`<span>${f}</span>`)}</div>
+    ${onReady && html`<div class="board-resize" title="Ziehen, um das Brett größer oder kleiner zu machen" onPointerDown=${startResize}></div>`}
   </div></div>`;
 }

@@ -82,8 +82,12 @@ function App() {
     if (!st) return;
     document.documentElement.dataset.board = st.boardTheme || 'modern';
     document.documentElement.dataset.bsize = String(st.boardSize || 3);
-    setBoardPrefs({ showDests: st.showDests !== false, anim: st.anim !== false, input: st.moveInput || 'both' });
-  }, [st && st.boardTheme, st && st.boardSize, st && st.showDests, st && st.anim, st && st.moveInput]);
+    // Mit dem Griff gezogene Größe hat Vorrang vor der Stufe aus den Einstellungen
+    if (st.boardPx) document.documentElement.style.setProperty('--board-px', st.boardPx + 'px');
+    else document.documentElement.style.removeProperty('--board-px');
+    document.body.dispatchEvent(new Event('chessground.resize'));
+    setBoardPrefs({ showDests: st.showDests !== false, anim: st.anim !== false, input: st.moveInput || 'both', onResize: px => setSettings({ boardPx: px }) });
+  }, [st && st.boardTheme, st && st.boardSize, st && st.boardPx, st && st.showDests, st && st.anim, st && st.moveInput]);
   const syncing = useRef(false);
   const again = useRef(false);
   const timer = useRef(null);

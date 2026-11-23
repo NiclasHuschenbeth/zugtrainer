@@ -553,9 +553,9 @@ html[data-board="brown"] { --coord-light-sq: #B58863; --coord-dark-sq: #F0D9B5; 
 
 /* Editor und Analyse: Brett links, rechts Kopf, Züge und Reiter. Die Seite ist so hoch wie das Fenster, nur Zugliste und Info-Bereich rollen. */
 main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
-.editor.v2 { --ed-h: max(500px, calc(100vh - 78px)); height: var(--ed-h); grid-template-columns: minmax(0, min(680px, calc(var(--ed-h) - 52px))) minmax(340px, 1fr); align-items: stretch; }
+.editor.v2 { --ed-h: max(500px, calc(100vh - 78px)); height: var(--ed-h); grid-template-columns: minmax(0, min(680px, calc(var(--ed-h) - 150px))) minmax(340px, 1fr); align-items: stretch; }
 @supports (height: 100dvh) { .editor.v2 { --ed-h: max(500px, calc(100dvh - 78px)); } }
-.editor.v2 .editor-board { min-width: 0; }
+.editor.v2 .editor-board { min-width: 0; min-height: 0; overflow-y: auto; } /* Brett + Pfeiltasten + FEN + Repertoire-Zeile; nie über die Fußzeile */
 .editor.v2 .editor-side { height: 100%; min-height: 0; gap: 10px; }
 .editor.v2 .card { padding: 12px 14px; gap: .5rem; }
 /* Kopf in einer Zeile: Name, Kapitelauswahl, Knöpfe */
@@ -641,7 +641,7 @@ div.pv:hover { background: none; }
 @media (max-width: 820px) {
   .editor.v2 { height: auto; display: block; }
   /* Das Brett bleibt beim Scrollen oben stehen: man kann immer ziehen */
-  .editor.v2 .editor-board { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 6px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .editor.v2 .editor-board { overflow: visible; position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 6px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
   .editor.v2 .editor-side { height: auto; margin-top: 8px; }
   .ed-tabs { order: 1; position: sticky; z-index: 4; }
   .ed-tabs .only-narrow { display: inline-block; }

@@ -240,6 +240,18 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
 
   const engineEval = best && best.fen === fen && (best.cp != null || best.mate != null) ? best : null;
   const ev = engineEval || (cloudEval && cloudEval.fen === fen ? cloudEval : null);
+  // Stellung per FEN: im Analyse-Brett ersetzt sie das Brett, im Repertoire wird daraus ein neues Kapitel
+  const loadFen = text => {
+    const pos = posFromFen(text.trim()); // wirft bei ungültiger FEN
+    const startFen = makeFen(pos.toSetup());
+    if (free) {
+      w.chapters = [{ name: 'Analyse', startFen, children: [] }];
+      setCi(0);
+      setPath([]);
+      commit();
+    } else addChapters([{ name: `Kapitel ${w.chapters.length + 1} (FEN)`, startFen, children: [] }]);
+  };
+
   const removeChapter = () => {
     if (w.chapters.length < 2 || !confirm(`Kapitel „${chapter.name}“ löschen?`)) return;
     w.chapters.splice(ci, 1);
@@ -279,6 +291,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
         <button class="btn small" onClick=${() => setFlipped(!flipped)} title="Brett drehen (F)">⇅ Drehen</button>
         <label class="check small" title="Zeigt die Züge, die an dieser Stelle schon im Repertoire stehen, als Pfeile"><input type="checkbox" checked=${arrows} onChange=${e => setSettings({ varArrows: e.target.checked })} /> Pfeile</label>
       </div>
+      <${FenRow} fen=${fen} free=${free} onLoad=${loadFen} />
       ${refReps.length > 0 && (hits.length > 0 || known >= 0) && html`<div class="ref-line small" title="Züge aus deinen Repertoires in dieser Stellung (Details im Reiter „Repertoires“)">
         ${hits.length
           ? hits.map(h => html`<span class="ref-item"><span class="muted">${h.rep.name}:</span>${' '}${h.moves.length
@@ -456,6 +469,44 @@ function EvalBar({ ev, whiteBelow }) {
 }
 
 /** Neues Kapitel: leer, ab einer Stellung (FEN) oder aus PGN-Text. */
+/** FEN-Zeile unter dem Brett: aktuelle Stellung zum Kopieren, eingefügte FEN laden. */
+function FenRow({ fen, free, onLoad }) {
+  const [text, setText] = useState(null); // null = zeigt die aktuelle Stellung
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const value = text === null ? fen : text;
+  const load = () => {
+    try {
+      onLoad(value);
+      setText(null);
+      setError('');
+    } catch {
+      setError('Das ist keine gültige FEN.');
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(fen);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Kopieren nicht erlaubt: Text steht markierbar im Feld
+    }
+  };
+  const editing = text !== null && text.trim() !== fen;
+  return html`<div class="fen-row">
+    <label class="fen-field small">FEN
+      <input id="fen-input" type="text" spellcheck=${false} autocomplete="off" value=${value} onFocus=${e => e.target.select()}
+        onInput=${e => { setText(e.target.value); setError(''); }} onKeyDown=${e => e.key === 'Enter' && editing && load()} />
+    </label>
+    ${editing
+      ? html`<button class="btn small primary" onClick=${load} title=${free ? 'Diese Stellung auf das Brett stellen' : 'Neues Kapitel mit dieser Startstellung anlegen'}>${free ? 'Laden' : 'Als Kapitel'}</button>
+          <button class="btn small ghost" onClick=${() => { setText(null); setError(''); }}>Abbrechen</button>`
+      : html`<button class="btn small" onClick=${copy} title="Aktuelle Stellung als FEN kopieren">${copied ? 'Kopiert ✓' : 'Kopieren'}</button>`}
+    ${error && html`<div class="msg bad small fen-error">${error}</div>`}
+  </div>`;
+}
+
 function ChapterForm({ count, onAdd, onCancel }) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');

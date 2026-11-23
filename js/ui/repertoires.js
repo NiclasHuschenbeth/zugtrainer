@@ -54,7 +54,7 @@ function WeekMini({ activity }) {
 
 const addSample = addRepertoire => addRepertoire({ name: SAMPLE_NAME, color: SAMPLE_COLOR, chapters: parseRepertoirePgn(SAMPLE_PGN) });
 
-export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin, moreCourses, hasCourses, courseBusy, onAddCourse, onChooseCourses, removeMany }) {
+export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRepertoire, train, open, go, account, openLogin, moreCourses, hasCourses, courseBusy, onAddCourse, onChooseCourses, removeMany, onCombine }) {
   const [uploadOpen, setUploadOpen] = useState(() => !!pendingStudy());
   const [editing, setEditing] = useState(false); // "Liste bearbeiten": mehrere Repertoires auf einmal entfernen
   const [picked, setPicked] = useState(() => new Set());
@@ -117,7 +117,7 @@ export function RepertoiresView({ db, setGoal, setSettings, addRepertoire, newRe
   return html`<div class="stack">
     ${showInstall && html`<${InstallHint} dismiss=${() => setSettings({ installHint: 'dismissed' })} />`}
     ${!none && html`<${TodayStrip} db=${db} setGoal=${setGoal} train=${train} onAdd=${() => setUploadOpen(!uploadOpen)} />`}
-    ${(uploadOpen || none) && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} onClose=${none ? null : () => setUploadOpen(false)} token=${db.settings.lichessToken} />`}
+    ${(uploadOpen || none) && html`<${Upload} addRepertoire=${addRepertoire} newRepertoire=${newRepertoire} onCombine=${onCombine} onClose=${none ? null : () => setUploadOpen(false)} token=${db.settings.lichessToken} />`}
     ${none && html`<p class="muted center">Noch kein Repertoire vorhanden. Lade eine PGN-Datei hoch oder probiere das Beispiel aus.</p>`}
     ${none && openLogin && !account && html`<div class="card reco-hint">
       <span><b>Kurs gekauft?</b> Melde dich mit deiner Kauf-E-Mail an, dann erscheinen deine Kurse automatisch.</span>
@@ -349,16 +349,22 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
           <h1 class="rep-title">${rep.name}</h1>
           <div class="muted small">
             <span class=${`pill ${rep.color}`}>${rep.color === 'white' ? 'Weiß' : 'Schwarz'}</span>
-            ${rep.chapters.length} Kapitel · ${s.lines} Varianten · ${s.total} Züge
+            ${rep.combo ? 'Kombiniert · ' : ''}${rep.chapters.length} Kapitel · ${s.lines} Varianten · ${s.total} Züge
           </div>
+          ${rep.combo && html`<div class="muted small combo-src">Aus: ${rep.combo.parts.map(p => (db.repertoires.find(r => r.id === p.repId) || { name: 'nicht mehr vorhanden' }).name).join(' · ')}</div>`}
+          ${rep.comboMissing > 0 && html`<div class="msg bad small">${rep.comboMissing === 1 ? 'Ein Repertoire dieser Zusammenstellung ist' : `${rep.comboMissing} Repertoires dieser Zusammenstellung sind`} gerade nicht verfügbar (gelöscht, ausgeblendet oder nicht angemeldet).</div>`}
         </div>
         <${Menu} label="Mehr" className="btn" align="right">
-          <${MenuItem} title="Repertoire bearbeiten" hint="Züge, Varianten und Kommentare im Editor ändern" onClick=${() => edit(rep.id)} />
+          ${rep.combo
+            ? html`<${MenuItem} title="Zusammenstellung ändern" hint="Repertoires, Reihenfolge und ab welcher Stellung sie gelten" onClick=${() => edit(rep.id)} />`
+            : html`<${MenuItem} title="Repertoire bearbeiten" hint="Züge, Varianten und Kommentare im Editor ändern" onClick=${() => edit(rep.id)} />`}
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
           <${MenuDivider} />
           ${isCourse
             ? html`<${MenuItem} title="Kurs ausblenden" hint="Lernstand bleibt; zurückholen auf der Startseite unter „Weitere freigeschaltete Kurse“" onClick=${() => confirm(`Kurs „${rep.name}“ aus der Liste nehmen? Dein Lernstand bleibt erhalten.`) && remove()} />`
-            : html`<${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />`}
+            : rep.combo
+              ? html`<${MenuItem} title="Kombination löschen" danger=${true} onClick=${() => confirm(`Kombiniertes Repertoire „${rep.name}“ löschen? Die Repertoires darin und ihr Lernstand bleiben erhalten.`) && remove()} />`
+              : html`<${MenuItem} title="Repertoire löschen" danger=${true} onClick=${() => confirm(`Repertoire „${rep.name}“ samt Lernfortschritt löschen?`) && remove()} />`}
         <//>
       </div>
       <div class="progress"><div style=${{ width: `${pct}%` }}></div></div>
@@ -522,7 +528,7 @@ function LichessImport({ addRepertoire, token, onDone }) {
   </div>`;
 }
 
-function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
+function Upload({ addRepertoire, newRepertoire, noSample, token, onClose, onCombine }) {
   const [name, setName] = useState('');
   const [author, setAuthor] = useState('');
   const [color, setColor] = useState('white');
@@ -585,11 +591,15 @@ function Upload({ addRepertoire, newRepertoire, noSample, token, onClose }) {
       ${onClose && html`<button class="btn ghost small" type="button" onClick=${onClose}>Schließen</button>`}
     </div>
     <div class="tabs add-tabs" role="tablist">
-      ${[['pgn', 'PGN-Datei'], ['lichess', 'Von Lichess'], ['empty', 'Leeres Repertoire']].map(
+      ${[['pgn', 'PGN-Datei'], ['lichess', 'Von Lichess'], ['empty', 'Leeres Repertoire'], ...(onCombine ? [['combo', 'Kombinieren']] : [])].map(
         ([k, t]) => html`<button type="button" role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${t}</button>`,
       )}
     </div>
     ${tab === 'lichess' && html`<${LichessImport} addRepertoire=${addRepertoire} token=${token} onDone=${() => setOpen(false)} />`}
+    ${tab === 'combo' && html`<div class="stack">
+      <p class="muted">Setze aus mehreren Repertoires ein eigenes zusammen, zum Beispiel einen Kurs als Grundlage, gegen eine bestimmte Eröffnung einen anderen Kurs und für einzelne Varianten deine eigene PGN. Du legst fest, welches Repertoire bei Überschneidungen zählt.</p>
+      <div class="row"><button class="btn primary" type="button" onClick=${onCombine}>Repertoires kombinieren</button></div>
+    </div>`}
     ${tab === 'empty' && html`<div class="stack">
       <p class="muted">Legt ein leeres Repertoire an und öffnet den Editor. Dort gibst du die Züge selbst auf dem Brett ein.</p>
       ${nameAndColor}

@@ -14,6 +14,8 @@ import { Editor } from './ui/editor.js';
 import { Scrim } from './ui/scrim.js';
 import { MaiaTest } from './ui/maiatest.js';
 import { setBoardPrefs } from './ui/board.js';
+import { ComboEditor } from './ui/combo.js';
+import { comboProgress, resolveCombo } from './lib/combo.js';
 import { BoardSettings } from './ui/boardsettings.js';
 import { CONFIG } from './config.js';
 import { AccountDialog } from './ui/account.js';
@@ -45,7 +47,7 @@ const viewToHash = v => {
   if (['rep', 'edit', 'scrim'].includes(v.name) && v.repId) return `#/${v.name}/${v.repId}`;
   if (v.name === 'train' && v.repId) return v.mode === 'practice' ? `#/rep/${v.repId}` : `#/train/${v.repId}/${v.mode}${v.chapter != null ? '/' + [].concat(v.chapter).join(',') : ''}`;
   if (v.name === 'gaps' || v.name === 'games' || v.name === 'compare') return '#/luecken';
-  if (v.name === 'analyse' || v.name === 'maia-test') return `#/${v.name}`;
+  if (['analyse', 'maia-test', 'combo'].includes(v.name)) return `#/${v.name}`;
   return '#/';
 };
 const hashToView = h => {
@@ -55,7 +57,7 @@ const hashToView = h => {
     return { name: 'train', repId: id, mode, chapter: ch !== undefined && ch !== '' ? (ch.includes(',') ? ch.split(',').map(Number) : +ch) : null, focusKey: null, visits: null, nonce: Date.now(), backTo: { name: 'rep', repId: id } };
   }
   if (n === 'luecken' || n === 'games' || n === 'compare') return { name: 'gaps' };
-  if (n === 'analyse' || n === 'maia-test') return { name: n };
+  if (['analyse', 'maia-test', 'combo'].includes(n)) return { name: n };
   return { name: 'home' };
 };
 
@@ -451,7 +453,7 @@ function App() {
   const back = () => setView(view.backTo || { name: 'home' });
 
   const train = (repId, mode, chapter = null, focusKey = null, backTo = undefined) => {
-    const rep = db.repertoires.find(r => r.id === repId);
+    const rep = vdb.repertoires.find(r => r.id === repId);
     const visits = mode === 'learn' && rep && db.games.length ? positionVisits(rep, db.games) : null;
     setView({ name: 'train', repId, mode, chapter, focusKey, visits, nonce: Date.now(), backTo: backTo === undefined ? here : backTo });
   };
@@ -535,7 +537,10 @@ function App() {
   const grade = (repId, mode) => (key, ok) =>
     update(cur => {
       const mine = { ...(cur.progress[repId] || {}) };
-      mine[key] = gradeCard(mine[key], ok, mode);
+      // Kombiniertes Repertoire: der jüngste Stand aus den Quellen zählt als bisheriger Stand
+      const combo = cur.repertoires.find(r => r.id === repId && r.combo);
+      const prev = combo ? comboProgress(combo, cur.progress)[key] : mine[key];
+      mine[key] = gradeCard(prev, ok, mode);
       const k = dayKey();
       const days = { ...cur.activity.days, [k]: (cur.activity.days[k] || 0) + 1 };
       return { progress: { ...cur.progress, [repId]: mine }, activity: { ...cur.activity, days } };
@@ -545,9 +550,29 @@ function App() {
   // Für die Oberfläche bekommen sie leere Kapitel; an den gespeicherten Daten ändert das nichts.
   const signedIn = !!account || maySignedIn();
   const lockOf = r => (isCourseId(r.id) ? (r.locked ? 'revoked' : signedIn ? null : 'signedout') : null);
-  const vdb = db.repertoires.some(lockOf)
-    ? { ...db, repertoires: db.repertoires.map(r => (lockOf(r) ? { ...r, chapters: [], keySolutions: undefined, videos: undefined, lock: lockOf(r) } : r)) }
-    : db;
+  // Kombinierte Repertoires: Kapitel aus den Quellen berechnen, Lernstand aus allen Quellen zusammenführen
+  const hasCombo = db.repertoires.some(r => r.combo);
+  const byIdAll = new Map(db.repertoires.map(r => [r.id, r]));
+  const usable = r => !lockOf(r) && !r.locked;
+  const vdb =
+    db.repertoires.some(lockOf) || hasCombo
+      ? {
+          ...db,
+          repertoires: db.repertoires.map(r =>
+            r.combo ? resolveCombo(r, byIdAll, usable) : lockOf(r) ? { ...r, chapters: [], keySolutions: undefined, videos: undefined, lock: lockOf(r) } : r,
+          ),
+          progress: hasCombo ? { ...db.progress, ...Object.fromEntries(db.repertoires.filter(r => r.combo).map(r => [r.id, comboProgress(r, db.progress)])) } : db.progress,
+        }
+      : db;
+  const saveCombo = (existing, { name, color, parts }) => {
+    if (existing) {
+      update(cur => ({ repertoires: cur.repertoires.map(r => (r.id === existing.id ? { ...r, name, color, combo: { parts }, updatedAt: Date.now() } : r)) }));
+      return existing.id;
+    }
+    const id = crypto.randomUUID();
+    update(cur => ({ repertoires: [...cur.repertoires, { id, name, color, chapters: [], combo: { parts }, createdAt: Date.now(), updatedAt: Date.now() }] }));
+    return id;
+  };
   const rep = view.repId ? vdb.repertoires.find(r => r.id === view.repId) : null;
   if (rep && !rep.lock) {
     try {
@@ -558,6 +583,7 @@ function App() {
   }
   // Repertoires als Referenz im Analyse-Brett/Editor (gesperrte Kurse haben keine Züge)
   const refReps = vdb.repertoires.filter(r => !r.lock && !r.locked && r.chapters && r.chapters.length);
+  const refOnly = refReps.filter(r => !r.combo); // im Analyse-Brett nur die echten Quellen (sonst doppelt)
   /** Zuletzt geöffnetes Repertoire (für Testpartie und Lücken finden aus dem Werkzeuge-Menü). */
   const lastRep = () => {
     let id = null;
@@ -576,9 +602,9 @@ function App() {
     const only = view.focusKey === 'due' || view.focusKey === 'fresh' ? view.focusKey : null;
     const other =
       only === 'due' &&
-      db.repertoires
-        .filter(r => r.id !== rep.id)
-        .map(r => ({ r, due: keyStats(r, db.progress[r.id] || {}).due }))
+      vdb.repertoires
+        .filter(r => r.id !== rep.id && !r.lock)
+        .map(r => ({ r, due: keyStats(r, vdb.progress[r.id] || {}).due }))
         .filter(x => x.due > 0)
         .sort((a, b) => b.due - a.due)[0];
     body = html`<${KeyTrainer}
@@ -586,7 +612,7 @@ function App() {
       next=${other ? { name: other.r.name, due: other.due, go: () => train(other.r.id, 'keys', null, 'due', view.backTo) } : null}
       key=${view.nonce}
       rep=${rep}
-      progress=${db.progress[rep.id] || {}}
+      progress=${vdb.progress[rep.id] || {}}
       settings=${db.settings}
       setSettings=${setSettings}
       onGrade=${grade(rep.id, 'review')}
@@ -597,7 +623,7 @@ function App() {
     body = html`<${Trainer}
       key=${view.nonce}
       rep=${rep}
-      progress=${db.progress[rep.id] || {}}
+      progress=${vdb.progress[rep.id] || {}}
       mode=${view.mode}
       chapter=${view.chapter}
       focusKey=${view.focusKey}
@@ -611,13 +637,17 @@ function App() {
       onMore=${() => train(rep.id, view.mode, view.chapter, null, view.backTo)}
       onDone=${() => view.mode !== 'practice' && update(cur => ({ settings: { ...cur.settings, lessons: (cur.settings.lessons || 0) + 1 } }))}
     />`;
+  } else if (vname === 'edit' && rep && rep.combo) {
+    body = html`<${ComboEditor} key=${rep.id} reps=${refOnly} combo=${rep} progress=${db.progress} onCancel=${back} onSave=${c => { saveCombo(rep, c); back(); }} />`;
+  } else if (view.name === 'combo') {
+    body = html`<${ComboEditor} reps=${refOnly} combo=${null} progress=${db.progress} onCancel=${() => go('home')} onSave=${c => setView({ name: 'rep', repId: saveCombo(null, c) })} />`;
   } else if (vname === 'edit' && rep) {
-    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} refs=${refReps.filter(r => r.id !== rep.id)} />`;
+    body = html`<${Editor} key=${rep.id} rep=${rep} at=${view.at} focus=${view.focus} settings=${db.settings} setSettings=${setSettings} saveRep=${saveRep} onExit=${back} refs=${refOnly.filter(r => r.id !== rep.id)} />`;
   } else if (view.name === 'maia-test') {
     body = html`<${MaiaTest} onExit=${() => go('home')} />`;
   } else if (view.name === 'analyse') {
     // Freies Analysebrett: der Editor auf einem Notizblock, der nur bis zum Neuladen der Seite bleibt (nichts wird gespeichert)
-    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} refs=${refReps} />`;
+    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} refs=${refOnly} />`;
   } else if (vname === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}
@@ -672,11 +702,12 @@ function App() {
       courseBusy=${courseBusyAdd}
       onAddCourse=${addCourse}
       onChooseCourses=${() => setChoice({ first: false })}
+      onCombine=${refOnly.length >= 2 ? () => go('combo') : null}
       removeMany=${ids => ids.forEach(removeRepertoire)}
     />`;
   }
 
-  const isHome = ['home', 'rep', 'train', 'edit'].includes(view.name);
+  const isHome = ['home', 'rep', 'train', 'edit', 'combo'].includes(view.name);
   const inTools = ['gaps', 'games', 'compare', 'scrim'].includes(view.name);
   const openScrim = () => {
     const id = lastRep();

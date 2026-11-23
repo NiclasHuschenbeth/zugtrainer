@@ -132,8 +132,8 @@ export const OPENINGS_DE = {
   'Saragossa Opening': null,
   'Scandinavian Defense': 'Skandinavisch',
   'Scotch Game': 'Schottisch',
-  'Semi-Slav Defense': 'Halbslawisch',
-  'Semi-Slav Defense Accepted': 'Halbslawisch',
+  'Semi-Slav Defense': 'Semislawisch',
+  'Semi-Slav Defense Accepted': 'Semislawisch',
   'Sicilian Defense': 'Sizilianisch',
   'Slav Defense': 'Slawisch',
   'Slav Indian': null,
@@ -166,4 +166,140 @@ export const SETUP_MOVES = {
   // eindeutigere Anfangszüge als der kürzeste Lichess-Eintrag
   'Réti-Eröffnung': 'Nf3 d5 c4',
   'Londoner System': 'd4 d5 Bf4',
+};
+
+// Untervarianten, die in der Statistik aufklappbar sind (von Niclas festgelegt, 23.11.2026).
+// Je Eröffnung: [deutscher Name, Erkennung]. Erkennung ist entweder ein Muster für den Lichess-Variantennamen
+// (Text nach dem Doppelpunkt), { moves: [...] }: Zugfolgen (SAN, englisch), mit denen die Partie beginnt, oder
+// { test }: Aufbau-Regel – nötig für tiefe Varianten, die in der Lichess-Liste (nur bis 14 Halbzüge) fehlen. Der erste Treffer zählt.
+// Eröffnungen, die hier fehlen, haben keine Untervarianten.
+/** Halbzug, in dem Schwarz diesen Zug spielt (-1 = nicht in den ersten 20). */
+const blackAt = (mv, san) => mv.slice(0, 20).findIndex((m, i) => i % 2 === 1 && m.replace(/[+#]/g, '') === san);
+const whiteAt = (mv, san) => mv.slice(0, 20).findIndex((m, i) => i % 2 === 0 && m.replace(/[+#]/g, '') === san);
+const SPANISCH_GESCHLOSSEN = [
+  'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O h3',
+  'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O c3 d6 h3',
+];
+export const SUBS = {
+  // Lichess benennt die Hauptvarianten hier kaum nach den Zügen: zusätzlich nach Aufbau ({ test: (Weiß, Schwarz) }, Züge der ersten 20 Halbzüge)
+  'Abgelehntes Damengambit': [
+    ['Albin-Gegengambit', /^Albin/],
+    ['Chigorin-Verteidigung', /^Chigorin/],
+    // …c5 früh (bis zum 5. Zug); später gespieltes …c5 (z. B. in der Tartakower-Variante) zählt nicht
+    ['Tarrasch-Verteidigung', { test: (w, b, mv) => blackAt(mv, 'c5') >= 0 && blackAt(mv, 'c5') <= 5 && blackAt(mv, 'Nf6') < 0 }],
+    ['Semi-Tarrasch-Verteidigung', { test: (w, b, mv) => blackAt(mv, 'c5') >= 0 && blackAt(mv, 'c5') <= 9 && b.has('Nf6') }],
+    // Abtausch nur, wenn Weiß früh (bis zum 5. Zug) auf d5 tauscht
+    ['Abtausch-Variante', { test: (w, b, mv) => whiteAt(mv, 'cxd5') >= 0 && whiteAt(mv, 'cxd5') <= 8 && b.has('exd5') }],
+    ['Ragozin-Verteidigung', { test: (w, b) => w.has('Nf3') && b.has('Nf6') && b.has('Bb4') }],
+    ['Cambridge-Springs-Verteidigung', { test: (w, b) => w.has('Bg5') && b.has('Qa5') && b.has('Nbd7') }],
+    ['Lasker-Verteidigung', { test: (w, b) => w.has('Bh4') && b.has('h6') && b.has('Ne4') }],
+    ['Tartakower-Verteidigung', { test: (w, b) => w.has('Bg5') && b.has('h6') && b.has('b6') }],
+    ['Abtausch-Variante', /^Exchange Variation/],
+    ['Cambridge-Springs-Verteidigung', /^Cambridge Springs/],
+    ['Lasker-Verteidigung', /^Lasker Defense/],
+    ['Ragozin-Verteidigung', /^Ragozin/],
+    ['Semi-Tarrasch-Verteidigung', /^Semi-Tarrasch/],
+    ['Tarrasch-Verteidigung', /^Tarrasch Defense/],
+    ['Tartakower-Verteidigung', /^Tartakower Defense/],
+  ],
+  'Caro-Kann': [
+    ['Panov-Angriff', /^Panov/],
+    ['Vorstoß-Variante', /^Advance/],
+    ['Zweispringer-Angriff', /^Two Knights/],
+  ],
+  Französisch: [
+    ['Winawer-Variante', /^Winawer/],
+    ['McCutcheon-Variante', /^McCutcheon/],
+    ['Tarrasch-Variante', /^Tarrasch/],
+    ['Rubinstein-Variante', /^Rubinstein/],
+    ['Steinitz-Variante', /^Steinitz Variation|^Classical Variation, Steinitz/],
+    ['Abtausch-Variante', /^Exchange/],
+    ['St.-George-Verteidigung', /^St\. George/],
+    ['Vorstoß-Französisch', /^Advance/],
+  ],
+  Holländisch: [
+    ['Leningrad', /^Leningrad/],
+    ['Staunton-Gambit', /^Staunton/],
+    ['Stonewall', /^Stonewall/],
+  ],
+  Italienisch: [
+    ['Evans-Gambit', /^Evans/],
+    ['Giuoco Pianissimo', /Giuoco Pianissimo/],
+    ['Schottisches Gambit', /^Scotch Gambit/],
+    ['Zweispringer-Verteidigung', /^Two Knights/],
+  ],
+  Königsindisch: [
+    ['Averbakh-Variante', /^(Accelerated )?Averbakh/],
+    ['Fianchetto-Variante', /^Fianchetto/],
+    ['Makogonov-Variante', /^Makogonov/],
+    ['Petrosian-Variante', /^Petrosian/],
+    ['Sämisch-Variante', /^Sämisch/],
+    ['Smyslov-Variante', /^Smyslov/],
+    ['Vierbauern-Angriff', /^Four Pawns/],
+  ],
+  Läuferspiel: [
+    ['Boden-Kieseritzky-Gambit', /^Boden-Kieseritzky/],
+    ['Horwitz-Gambit', /^Horwitz/],
+    ['McDonnell-Gambit', /^McDonnell/],
+    ['Urusov-Gambit', /^Urusov/],
+  ],
+  'Nimzo-Indisch': [
+    ['Rubinstein-System', /^Rubinstein System/],
+    ['Sämisch-Variante', /^Sämisch/],
+  ],
+  'Philidor-Verteidigung': [['Hanham-Variante', /^Hanham/]],
+  Schottisch: [['Schottisches Gambit', /^Scotch Gambit/]],
+  Semislawisch: [
+    ['Botvinnik-Variante', /^Botvinnik/],
+    ['Noteboom-Variante', /^Noteboom/],
+  ],
+  Sizilianisch: [
+    ['Hyperbeschleunigter Drache', /^Hyperaccelerated Dragon/],
+    ['Beschleunigter Drache', /Accelerated Dragon/],
+    ['Drachen-Variante', /^Dragon Variation/],
+    ['Richter-Rauzer-Variante', /^Richter-Rauzer/],
+    ['Sozin-Angriff', /(^|, )Sozin Attack/],
+    ['Najdorf-Variante', /^Najdorf/],
+    ['Scheveninger System', /^Scheveningen/],
+    ['Klassischer Sizilianer', /^Classical Variation/],
+    ['Boleslavsky-Variante', /^Boleslavsky/],
+    ['Taimanov-Variante', /^Taimanov/],
+    ['Kan-Variante', /^Kan Variation/],
+    ['Sizilianisches Vierspringerspiel', /^Four Knights Variation/],
+    ['Lasker-Pelikan-Variante', /^Lasker-Pelikan/],
+    ['Morra-Gambit', /^Smith-Morra/],
+    ['Flügel-Gambit', /^Wing Gambit/],
+    ['Alapin-Variante', /^(Delayed )?Alapin/],
+    ['Geschlossen', /^Closed/],
+    ['Moskauer Variante', /^Moscow/],
+    ['Rossolimo-Variante', /Rossolimo/],
+    ['Prins-Variante', /^Prins/],
+    ["O'Kelly-Variante", /^O'Kelly/],
+    ['Nimzowitsch-Variante', /^Nimzowitsch Variation/],
+  ],
+  Slawisch: [
+    ['Abtausch-Variante', /^Exchange/],
+    ['Chebanenko-Variante', /^Chebanenko/],
+  ],
+  Spanisch: [
+    ['Marshall-Gambit', { moves: ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O c3 d5'] }],
+    ['Breyer-Variante', { moves: SPANISCH_GESCHLOSSEN.map(m => m + ' Nb8') }],
+    ['Zaitsev-Variante', { moves: SPANISCH_GESCHLOSSEN.map(m => m + ' Bb7') }],
+    ['Chigorin-Variante', { moves: SPANISCH_GESCHLOSSEN.map(m => m + ' Na5') }],
+    ['Archangelsk-Variante', /Arkhangelsk/],
+    ['Jänisch-Gambit', /^Schliemann/],
+    ['Offener Spanier', /^Open/],
+    ['Verzögerte Steinitz-Verteidigung', /Steinitz Deferred|Modern Steinitz/],
+    ['Steinitz-Verteidigung', /^Steinitz Defense/],
+    ['Berlin-Verteidigung', /Berlin/],
+    ['Cozio-Verteidigung', /Cozio/],
+    ['Bird-Variante', /^Bird/],
+    ['Abtausch-Variante', /^Exchange/],
+    ['Geschlossen', /^Closed/],
+  ],
+  Vierspringerspiel: [
+    ['Italienisches Vierspringerspiel', /^Italian/],
+    ['Schottisches Vierspringerspiel', /^Scotch/],
+    ['Spanisches Vierspringerspiel', /^Spanish/],
+  ],
 };

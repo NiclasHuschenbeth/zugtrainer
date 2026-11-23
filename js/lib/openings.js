@@ -1,15 +1,10 @@
 // Eröffnungen erkennen und auswerten (Namen: lichess-org/chess-openings, CC0).
 import { outcomeFor } from './games.js';
-import { OPENINGS_DE, SETUP_MOVES } from './openings-de.js';
+import { OPENINGS_DE, SETUP_MOVES, SUBS } from './openings-de.js';
 import { de } from './repertoire.js';
-import { variationDe } from './variations-de.js';
 
 let table = null;
 const famMoves = new Map(); // deutscher Familienname -> { moves, exact }
-// Untervarianten nach ECO: pro Familie und ECO-Schlüssel nur ein klassischer Name.
-// Die Lichess-Liste enthält sonst auch viele Spaß- und Kuriositätennamen.
-const ecoCanon = new Map(); // "<deutscher Familienname>|<ECO>" -> { first } (englischer Name der Untervariante)
-const NO_SUB = new Set(['Offen', 'Modern Variations', 'The Whale']); // zu allgemein: Partien zählen dann „ohne genauere Variante“
 /** Lädt die Namenstabelle erst bei Bedarf. */
 export async function loadOpenings() {
   if (!table) {
@@ -25,26 +20,6 @@ export async function loadOpenings() {
       if (!old || (exact && !old.exact) || (exact === old.exact && moves.length < old.moves.length)) famMoves.set(f, { moves, exact });
     }
     for (const [f, moves] of Object.entries(SETUP_MOVES)) famMoves.set(f, { moves, exact: true });
-    // Klassischer Name je ECO-Schlüssel: der erste Namensteil, der in diesem Schlüssel am häufigsten vorkommt
-    // (die Hauptvariante hat viele Unterlinien, Kuriositäten meist nur eine); bei Gleichstand die kürzeste Zugfolge
-    const count = new Map(); // key -> Map(first -> { n, moves })
-    for (const [eco, name, moves] of rows) {
-      if (!name.includes(':')) continue;
-      const f = germanName(familyOf(name));
-      if (!f) continue;
-      const k = `${f}|${eco}`;
-      const first = variationOf(name).split(',')[0].trim();
-      let m = count.get(k);
-      if (!m) count.set(k, (m = new Map()));
-      const e = m.get(first) || { n: 0, moves };
-      e.n++;
-      if (moves.length < e.moves.length) e.moves = moves;
-      m.set(first, e);
-    }
-    for (const [k, m] of count) {
-      const [first] = [...m.entries()].sort((a, b) => b[1].n - a[1].n || a[1].moves.length - b[1].moves.length)[0];
-      ecoCanon.set(k, { first });
-    }
   }
   return table;
 }
@@ -85,12 +60,22 @@ export function openingOf(game, map) {
   return hit ? { family, name: hit.name, eco: hit.eco } : null;
 }
 
-/** Untervariante einer erkannten Eröffnung: klassischer ECO-Name, nur der erste Teil, auf Deutsch ('' = keine genauere). */
-export function subOf(op) {
-  if (!op.eco) return '';
-  const canon = ecoCanon.get(`${op.family}|${op.eco}`);
-  const label = canon ? variationDe(canon.first) : '';
-  return NO_SUB.has(label) ? '' : label;
+/**
+ * Untervariante einer erkannten Eröffnung nach der festen Liste in openings-de.js (SUBS):
+ * erster Eintrag, dessen Muster zum Lichess-Variantennamen passt oder dessen Zugfolge die Partie beginnt. '' = keine.
+ */
+export function subOf(op, game) {
+  const list = SUBS[op.family];
+  if (!list) return '';
+  const v = variationOf(op.name) || '';
+  const moves = game ? game.moves.join(' ') : '';
+  const w = game ? sideMoves(game, true, 20) : new Set();
+  const b = game ? sideMoves(game, false, 20) : new Set();
+  for (const [label, test] of list) {
+    const hit = test instanceof RegExp ? test.test(v) : test.test ? !!game && test.test(w, b, game.moves) : test.moves.some(m => moves === m || moves.startsWith(m + ' '));
+    if (hit) return label;
+  }
+  return '';
 }
 
 const DE = {
@@ -190,7 +175,7 @@ export function openingStats(games, map) {
     if (!e) fam.set(f, (e = { name: f, n: 0, w: 0, d: 0, l: 0, vars: new Map() }));
     add(e, g);
     // Untervarianten auf Deutsch; gleich lautende (z. B. angenommen/abgelehnt) zusammen
-    const label = subOf(op);
+    const label = subOf(op, g);
     let v = e.vars.get(label);
     if (!v) e.vars.set(label, (v = { name: op.name, label, n: 0, w: 0, d: 0, l: 0 }));
     add(v, g);

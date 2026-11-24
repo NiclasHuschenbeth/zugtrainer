@@ -10,6 +10,7 @@ import { HomeReco } from './reco.js';
 import { CONFIG } from '../config.js';
 import { pgnAuthor } from '../lib/reference.js';
 import { MoreCourses } from './coursechoice.js';
+import { downloadPgn } from '../lib/pgnexport.js';
 
 const pctOf = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -359,6 +360,7 @@ function OpenRepertoireView({ db, rep, train, setSettings, attachKeySolutions, e
             ? html`<${MenuItem} title="Zusammenstellung ändern" hint="Repertoires, Reihenfolge und ab welcher Stellung sie gelten" onClick=${() => edit(rep.id)} />`
             : html`<${MenuItem} title="Repertoire bearbeiten" hint="Züge, Varianten und Kommentare im Editor ändern" onClick=${() => edit(rep.id)} />`}
           <${MenuItem} title="Testpartie" hint="Dein Repertoire gegen echte Gegnerzüge spielen" onClick=${() => scrim(rep.id)} />
+          ${rep.chapters.length > 0 && html`<${MenuItem} title="Als PGN herunterladen" hint="Alle Kapitel mit Varianten, Kommentaren und Pfeilen in einer Datei" onClick=${() => downloadPgn(rep)} />`}
           <${MenuDivider} />
           ${isCourse
             ? html`<${MenuItem} title="Kurs ausblenden" hint="Lernstand bleibt; zurückholen auf der Startseite unter „Weitere freigeschaltete Kurse“" onClick=${() => confirm(`Kurs „${rep.name}“ aus der Liste nehmen? Dein Lernstand bleibt erhalten.`) && remove()} />`

@@ -11,7 +11,7 @@ import { PRESETS, explore, masterGames, masterPgn, startLogin } from '../lib/lic
 import { cdbMoves, cdbQueue, formatCloud } from '../lib/chessdb.js';
 import { lineText, scanCoverage } from '../lib/coverage.js';
 import { parsePgn, startingPosition } from 'chessops/pgn.js';
-import { epdOf, parseRepertoirePgn } from '../lib/repertoire.js';
+import { epdOf, isKeyComment, parseRepertoirePgn } from '../lib/repertoire.js';
 import { Board } from './board.js';
 import { authorOf, lastKnown, refsAt } from '../lib/reference.js';
 
@@ -229,6 +229,13 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     else delete node.comment;
     commit();
   };
+  // Schlüsselstellung: nach einem Gegnerzug, wenn man selbst am Zug ist; Lösung = eigener Hauptzug danach
+  const keyAble = node && !free && turnOf(node.fen) === w.color;
+  const isKey = node && isKeyComment(node.comment);
+  const toggleKey = () => {
+    if (isKey) setComment(node.comment.replace(/(^|[.!?]\s+)Schl[üu]e?sselstellung\b\s*[.:!]?\s*/gi, '$1').trim());
+    else setComment(node.comment ? `Schlüsselstellung. ${node.comment}` : 'Schlüsselstellung.');
+  };
 
   const addChapters = list => {
     w.chapters.push(...list);
@@ -346,7 +353,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
       </div>
 
       <div class=${`card ed-moves ${narrow && infoTab !== 'moves' ? 'off' : ''}`}>
-        <${Tree} chapter=${chapter} path=${path.slice(0, trail.length)} select=${setPath} />
+        <${Tree} chapter=${chapter} path=${path.slice(0, trail.length)} select=${setPath} keyColor=${free ? null : w.color} />
         ${node
           ? html`<div class="node-tools">
               <div class="row">
@@ -354,7 +361,13 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
                 ${GLYPHS.map(g => html`<button class=${`btn small glyph ${node.glyph === g ? 'on' : ''}`} onClick=${() => setGlyph(g)}>${g}</button>`)}
                 <span class="sep"></span>
                 ${POS.map(([g, t]) => html`<button class=${`btn small glyph ${node.pos === g ? 'on' : ''}`} title=${t} onClick=${() => setPos(g)}>${g}</button>`)}
+                ${keyAble && html`<span class="sep"></span>
+                  <button class=${`btn small glyph key-star ${isKey ? 'on' : ''}`} onClick=${toggleKey}
+                    title=${isKey ? 'Markierung als Schlüsselstellung entfernen' : 'Als Schlüsselstellung markieren: Diese Stellung wird beim Üben der Schlüsselstellungen abgefragt'}>★ Schlüsselstellung</button>`}
               </div>
+              ${keyAble && isKey && html`<div class="muted small">${node.children.length
+                ? html`Wird als Schlüsselstellung abgefragt. Richtige Antwort: <b>${moveText(node.fen, node.children[0].san)}</b> (dein Hauptzug hier).`
+                : 'Lege noch deinen Zug in dieser Stellung an, er gilt dann als richtige Antwort.'}</div>`}
               <textarea rows=${node.comment ? Math.min(4, Math.max(2, Math.ceil(node.comment.length / 70))) : 1} placeholder="Kommentar zu diesem Zug …" value=${node.comment || ''} onInput=${e => setComment(e.target.value)}></textarea>
               <div class="row">
                 <button class="link small" disabled=${path[trail.length - 1] === 0} onClick=${promote}>Zur Hauptvariante machen</button>
@@ -389,7 +402,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
 }
 
 /** Zugbaum im PGN-Stil: Hauptvariante fortlaufend, Nebenvarianten in Klammern. */
-function Tree({ chapter, path, select }) {
+function Tree({ chapter, path, select, keyColor }) {
   const current = path.join('.');
   const ref = useRef(null);
   const [fold, setFold] = useState({ all: false, flips: new Set() });
@@ -410,7 +423,7 @@ function Tree({ chapter, path, select }) {
     const label = moveLabel(fenBefore);
     const key = p.join('.');
     return html`<span class=${`mv ${key === current ? 'cur' : ''}`} onClick=${() => select(p)}>
-        ${(forceLabel || whiteLabel(label)) && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph && html`<span class="gl">${n.glyph}</span>`}${n.pos && html`<span class="gl"> ${n.pos}</span>`}
+        ${(forceLabel || whiteLabel(label)) && html`<span class="no">${label}</span>`}${de(n.san)}${n.glyph && html`<span class="gl">${n.glyph}</span>`}${n.pos && html`<span class="gl"> ${n.pos}</span>`}${keyColor && isKeyComment(n.comment) && turnOf(n.fen) === keyColor && html`<span class="key-mark" title="Schlüsselstellung">★</span>`}
       </span>
       ${n.comment && html`<span class="cmi">${n.comment}</span>`}`;
   };

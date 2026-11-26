@@ -75,7 +75,22 @@ function App() {
   const [choice, setChoice] = useState(null); // Kursauswahl offen: { first: bool }
   const [courseBusyAdd, setCourseBusyAdd] = useState(null);
   const firstLogin = useRef(false);
-  const scratch = useRef({ id: 'analyse', name: 'Analyse', color: 'white', chapters: [{ name: 'Analyse', startFen: INITIAL_FEN, children: [] }] });
+  // Analyse-Brett: Stand bleibt auch nach dem Neuladen der Seite erhalten (nur in diesem Browser)
+  const scratch = useRef(null);
+  if (!scratch.current) {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem('zt-analyse') || 'null');
+    } catch (e) {}
+    scratch.current = saved && saved.rep && saved.rep.chapters && saved.rep.chapters.length
+      ? saved
+      : { rep: { id: 'analyse', name: 'Analyse', color: 'white', chapters: [{ name: 'Analyse', startFen: INITIAL_FEN, children: [] }] }, at: null };
+  }
+  const keepScratch = () => {
+    try {
+      localStorage.setItem('zt-analyse', JSON.stringify(scratch.current));
+    } catch (e) {}
+  };
   const [courseNote, setCourseNote] = useState(null); // Namen gerade aktualisierter Kurse
   const [courseBusy, setCourseBusy] = useState(null);
   // Brett-Einstellungen auf die ganze Seite anwenden (Farben und Größe über CSS, Verhalten über board.js)
@@ -646,8 +661,11 @@ function App() {
   } else if (view.name === 'maia-test') {
     body = html`<${MaiaTest} onExit=${() => go('home')} />`;
   } else if (view.name === 'analyse') {
-    // Freies Analysebrett: der Editor auf einem Notizblock, der nur bis zum Neuladen der Seite bleibt (nichts wird gespeichert)
-    body = html`<${Editor} key="analyse" rep=${scratch.current} settings=${db.settings} setSettings=${setSettings} saveRep=${r => (scratch.current = r)} onExit=${() => go('home')} free=${true} refs=${refOnly} />`;
+    // Freies Analysebrett: Notizblock, der im Browser gespeichert wird (bleibt beim Neuladen), nicht im Konto
+    body = html`<${Editor} key="analyse" rep=${scratch.current.rep} at=${scratch.current.at} settings=${db.settings} setSettings=${setSettings}
+      saveRep=${r => { scratch.current = { ...scratch.current, rep: r }; keepScratch(); }}
+      onPos=${at => { scratch.current = { ...scratch.current, at }; keepScratch(); }}
+      onExit=${() => go('home')} free=${true} refs=${refOnly} />`;
   } else if (vname === 'scrim' && rep) {
     body = html`<${Scrim}
       key=${rep.id}

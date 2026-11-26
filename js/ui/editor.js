@@ -32,7 +32,7 @@ function useNarrow() {
   return narrow;
 }
 
-export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free, refs = [] }) {
+export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit, free, onPos, refs = [] }) {
   const work = useRef(null);
   if (!work.current) work.current = structuredClone(rep);
   const w = work.current;
@@ -59,15 +59,26 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     force();
     dirty.current = true;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => saveRep({ ...w }), 400);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      saveRep({ ...w });
+    }, 400);
   };
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Seite wird neu geladen oder geschlossen: noch nicht gespeicherte Änderung sofort sichern
+    const flush = () => {
+      if (!timer.current) return;
+      clearTimeout(timer.current);
+      timer.current = null;
+      saveRep({ ...w });
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
       clearTimeout(timer.current);
       if (dirty.current) saveRep({ ...w });
-    },
-    [],
-  );
+    };
+  }, []);
 
   const chapter = w.chapters[ci];
   const trail = [];
@@ -259,6 +270,18 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
     } else addChapters([{ name: `Kapitel ${w.chapters.length + 1} (FEN)`, startFen, children: [] }]);
   };
 
+  // Analyse-Brett: zuletzt angesehene Stellung merken
+  useEffect(() => {
+    if (onPos) onPos({ ci, path });
+  }, [ci, path]);
+  const clearAnalysis = () => {
+    if (chapter.children.length && !confirm('Alle Züge dieser Analyse löschen und mit der Grundstellung neu beginnen?')) return;
+    w.chapters = [{ name: 'Analyse', startFen: INITIAL_FEN, children: [] }];
+    setCi(0);
+    setPath([]);
+    commit();
+  };
+
   const removeChapter = () => {
     if (w.chapters.length < 2 || !confirm(`Kapitel „${chapter.name}“ löschen?`)) return;
     w.chapters.splice(ci, 1);
@@ -314,6 +337,7 @@ export function Editor({ rep, at, focus, settings, setSettings, saveRep, onExit,
           <b class="ed-title">${free ? 'Analyse' : w.name}</b>
           <span class="row">
             <button class=${`btn small ${more ? 'on' : ''}`} aria-expanded=${more} onClick=${() => setMore(!more)} title="Name, Farbe, Kapitel, PGN-Export">⋯ Mehr</button>
+            ${free && html`<button class="btn small" onClick=${clearAnalysis} title="Alle Züge löschen und mit der Grundstellung neu beginnen">Neu</button>`}
             <button class="btn primary small" onClick=${onExit}>${free ? 'Schließen' : 'Fertig'}</button>
           </span>
         </div>

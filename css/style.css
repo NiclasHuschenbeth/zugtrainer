@@ -578,10 +578,10 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .ed-title { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ed-head .btn.on { border-color: var(--primary); color: var(--primary); }
 .ed-more { border-top: 1px solid var(--line); padding-top: .6rem; max-height: 40vh; overflow: auto; }
-.ed-moves { order: 1; flex: 1 1 0; min-height: 190px; overflow: hidden; }
-.ed-moves .tree-wrap { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: .3rem; }
+.ed-moves { order: 1; flex: 1 1 0; min-height: 190px; overflow-y: auto; } /* wird es zu eng, scrollt die Karte, statt dass sich Zugliste und Knöpfe überlagern */
+.ed-moves .tree-wrap { flex: 1 1 0; min-height: 96px; display: flex; flex-direction: column; gap: .3rem; }
 .ed-moves .tree-wrap .link { align-self: flex-start; flex: none; }
-.ed-moves .tree { flex: 1 1 0; max-height: none; min-height: 60px; }
+.ed-moves .tree { flex: 1 1 0; max-height: none; min-height: 0; }
 .ed-moves .node-tools { flex: none; gap: .35rem; padding-top: .5rem; }
 .ed-moves .node-tools .row { gap: .3rem; align-items: center; }
 .ed-moves .node-tools .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .2rem; }
@@ -590,6 +590,7 @@ main.wide:has(> .editor.v2) { padding-top: 12px; padding-bottom: 12px; }
 .ed-tabs button { padding: .35rem .55rem; white-space: nowrap; }
 .ed-tabs .only-narrow { display: none; }
 .ed-info { order: 3; flex: 0 1 auto; min-height: 110px; max-height: 38%; overflow: auto; }
+@media (max-height: 800px) { .ed-info { max-height: 30%; min-height: 90px; } } /* niedriges Fenster: mehr Platz für die Zugliste */
 .ed-info .card { border: 0; box-shadow: none; padding: 0; background: none; }
 .ed-pane[hidden] { display: none; }
 /* Referenz: Züge aus den eigenen Repertoires */
